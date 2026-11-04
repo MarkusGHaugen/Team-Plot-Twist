@@ -1,0 +1,16 @@
+[project]
+name = "team-plot-twist"
+version = "1.0.0"
+description = "Team Plot Twist: Escape from the pirate ship"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "streamlit==1.62.0",
+    "pytest==9.1.1",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

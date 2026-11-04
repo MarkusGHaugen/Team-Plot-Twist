@@ -1,0 +1,76 @@
+<div class="pt-game notranslate" lang="en" translate="no">
+  <div class="pt-topbar">
+    <div class="pt-title-wrap">
+      <div class="pt-eyebrow">TEAM PLOT TWIST · FOUR WAYS TO FREEDOM</div>
+      <div class="pt-title">Escape from the pirate ship</div>
+    </div>
+    <div class="pt-topbar-right">
+      <button type="button" class="pt-restart-button">Restart ↻</button>
+      <button type="button" class="pt-fullscreen-button">Fullscreen ⛶</button>
+      <button type="button" class="pt-music-button" aria-pressed="false" title="Exploration: The Young Buccaneer / Pirate Town — Derek &amp; Brandon Fiechter. Alerts: Deadly Combat — RPG Soundtracks.">Music: off ♫</button>
+      <input type="range" class="pt-music-volume" min="0" max="0.6" step="0.01" value="0.22" aria-label="Music volume" title="Music volume">
+      <button type="button" class="pt-journal-button">Journal · J</button>
+      <div class="pt-location" aria-live="polite">Cell</div>
+      <div class="pt-inventory" aria-live="polite"><span class="pt-key-icon">✦</span><span>Empty</span></div>
+    </div>
+  </div>
+
+  <div class="pt-stage" tabindex="0" role="application" aria-label="Escape from the pirate ship game area">
+    <canvas class="pt-canvas" aria-hidden="true"></canvas>
+    <div class="pt-stage-label">PIRATE SHIP · BELOW DECK</div>
+    <div class="pt-prompt" aria-live="polite" hidden></div>
+    <div class="pt-feedback" role="status" aria-live="polite" hidden></div>
+    <div class="pt-alert" role="status" hidden>⚠️ Guards searching · <span class="pt-alert-seconds">20</span> s</div>
+    <div class="pt-cutscene" role="status" hidden>The guard spotted you! He is taking you back to the cell.</div>
+    <div class="pt-inventory-panel" hidden>
+      <div class="pt-inventory-heading">Inventory <span>Press I to close</span></div>
+      <div class="pt-hand-slot">In hand: <strong>Empty</strong></div>
+      <div class="pt-inventory-items">
+        <button type="button" data-item="cell_key">🗝️ Cell key</button>
+        <button type="button" data-item="blue_key">🔵 Blue key</button>
+        <button type="button" data-item="pistol">🔫 Pistol</button>
+        <button type="button" data-item="lamp">🏮 Lamp</button>
+      </div>
+      <div class="pt-outfit-status">Outfit: Sailor</div>
+      <div class="pt-story-inventory"></div>
+    </div>
+    <section class="pt-document-panel" role="dialog" aria-modal="true" aria-label="Document" hidden>
+      <div class="pt-document-scroll">
+        <div class="pt-document-kicker"></div>
+        <h2 class="pt-document-title"></h2>
+        <div class="pt-document-body"></div>
+        <div class="pt-journal-entries"></div>
+        <div class="pt-document-hint"></div>
+        <div class="pt-document-feedback" role="status"></div>
+      </div>
+      <div class="pt-document-actions">
+        <span>Game paused</span>
+        <button type="button" class="pt-document-close">Close · F</button>
+        <button type="button" class="pt-ending-confirm" hidden>Confirm escape</button>
+      </div>
+    </section>
+    <section class="pt-ending-panel" aria-label="Ending" hidden>
+      <div class="pt-ending-copy">
+        <div class="pt-ending-kicker"></div>
+        <h2 class="pt-ending-title"></h2>
+        <p class="pt-ending-body"></p>
+        <p class="pt-ending-detail"></p>
+        <button type="button" class="pt-replay-scene">Replay scene</button>
+        <span>Choose Restart in the toolbar to try another route.</span>
+      </div>
+    </section>
+  </div>
+
+  <div class="pt-controls">
+    <span><kbd>A</kbd><kbd>D</kbd> or <kbd>←</kbd><kbd>→</kbd> walk</span>
+    <span><kbd>W</kbd> / <kbd>↑</kbd> climb · <kbd>↓</kbd> descend</span>
+    <span><kbd>E</kbd> take / steal / ambush</span>
+    <span><kbd>F</kbd> inspect / use / hide</span>
+    <span><kbd>T</kbd> bribe · <kbd>Space</kbd> crouch / stand</span>
+    <span><kbd>I</kbd> inventory</span>
+    <span><kbd>J</kbd> journal</span>
+    <span><kbd>L</kbd> lamp on/off</span>
+    <span><kbd>R</kbd> shoot</span>
+    <span class="pt-ready">Keyboard ready</span>
+  </div>
+</div>
