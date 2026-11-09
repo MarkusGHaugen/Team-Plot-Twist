@@ -31,6 +31,24 @@ def _route(*stops):
     return points if len(points) > 1 else points + [list(points[0])]
 
 
+def _walkable(x, y):
+    """The walkable position for a pose; snaps to the nearest deck or stair if it is off by a hair."""
+    try:
+        return L._position_at_xy(x, y)
+    except ValueError:
+        options = []
+        for zone, (left, right, fy) in L.FLOORS.items():
+            if zone == 'cell':
+                continue
+            fx = min(max(x, left), right)
+            options.append((math.dist((x, y), (fx, fy)), L.Position(zone, fx)))
+        for zone, (x1, y1, x2, y2) in L.STAIRS.items():
+            dx, dy = x2 - x1, y2 - y1
+            f = min(.99, max(.01, ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy)))
+            options.append((math.dist((x, y), (x1 + dx * f, y1 + dy * f)), L.Position(zone, f)))
+        return min(options, key=lambda o: o[0])[1]
+
+
 def _watch_pair(s, v):
     return 'watch_start' in v and s.cargo_alive and s.sleeper_alive
 
@@ -44,7 +62,7 @@ def plan(s, guard_elapsed, now):
     paths, returns, origins = {}, {}, {}
     for k in crew:
         pose = L.guard_pose_at(s, k, guard_elapsed + SERVE_DELAY_MS / 1000, gather)
-        start = L._position_at_xy(pose.x, pose.y)
+        start = _walkable(pose.x, pose.y)
         origins[k] = start
         seat = L.Position('dining', SEATS[k])
         paths[k] = _route(start, POT, seat) if k == 'dining' else _route(start, seat)

@@ -195,3 +195,23 @@ def test_new_actions_go_through_the_saved_game(tmp_path):
         r = apply_action(c, 'fire_cannon', deck.position, 0., 'c', now_ms=5_000)
         assert r.accepted, r.message
         assert 'cannon_fired' in story_progress(load_game(c, 'c'))['voyage']
+
+
+def test_meal_plan_never_fails_on_an_off_route_pose_and_fits_the_save():
+    import feast as F
+    assert F._walkable(1128.07, 343.94).zone in L.STAIRS or F._walkable(1128.07, 343.94).zone in L.FLOORS
+    s0 = free(items=['sleeping_pills', 'crowbar', 'rope', 'sail', 'whistle', 'manifest', 'seal'])
+    v = {'watch_start': 0, 'coins': 2, 'claimed': ['coins_hold', 'coins_provisions', 'coins_chart', 'coins_crew'],
+         'paid': ['cook'], 'cannon_fired': 5}
+    p = story_progress(s0)
+    p['inspected'] = [k for k in L.STORY_POINTS if L.STORY_POINTS[k]['kind'] != 'telescope']
+    p['voyage'] = v
+    s0 = replace(s0, story_state=json.dumps(p))
+    assert L.valid_story_state(s0.story_state)
+    longest = 0
+    for t in range(0, 210_000, 3_000):
+        r = drug_stew(s0, t / 1000, t + 1000)
+        assert r.accepted, r.message
+        longest = max(longest, len(r.state.story_state))
+        assert L.valid_story_state(r.state.story_state)
+    assert longest < 12_000
