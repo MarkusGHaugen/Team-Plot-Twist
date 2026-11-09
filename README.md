@@ -19,12 +19,20 @@ Open **http://localhost:8535**. On a Mac you can also run `run-team.command`; on
 uv run pytest -q
 ```
 
-## Four escape routes
+## Six escape routes
 
 - **Takeover:** Defeat every opponent and use the helm.
 - **Crate 07:** Open the crate with a crowbar or bribe the cook. Keep the cook alive and wait for the next port.
 - **Dinghy:** Find a sail and rope, or bring a sail and bribe the boatswain.
 - **Command:** Ambush the officer from a barrel, equip the captain uniform from the cabin chest, let any search settle, and command the helm with other crew still alive.
+- **Drugged stew:** Take the sleeping pills from the sea chest in the cabin and crush them into the galley stew. Five seconds later the cook serves it, the whole crew eats in the mess hall and falls asleep for two minutes. Take the dinghy or the helm before they wake. A gunshot or the cannon wakes them.
+- **Castaway:** Swallow the sleeping pills on the floor of your own cell. The crew think you are dead and throw you overboard in a barrel; after four days adrift you wash up on a deserted island.
+
+## Things to do aboard
+
+- **Telescope:** Climb the mast and press F at the telescope. A/D look around the horizon.
+- **Cannon:** Hold a lit lamp at the deck cannon and press F. The blast brings every pirate running to the cannon, which makes it a distraction if you hide in time.
+- **Rats** scurry around the hold and run from anyone who comes close.
 
 ## Controls
 

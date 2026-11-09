@@ -174,3 +174,19 @@ for ending in ENDINGS.values():ending['subtitle']=ending['subtitle'].replace('of
 DOCUMENTS['captains_log']['body']+='\n\nThe officer alone knows the captain’s face. If he disappears, a gold coat and command star might convince the remaining crew.'
 
 ROLES['sleeper']='Blue-key guard'
+
+# Ship life: things to do aboard that are not an escape by themselves.
+STORY_POINTS['telescope']={'zone':'mast_top','x':790.0,'reach':22.0,'name':'Telescope','kind':'telescope'}
+STORY_POINTS['cannon']={'zone':'upper_deck','x':300.0,'reach':34.0,'name':'Deck cannon','kind':'cannon'}
+
+# Sleeping pills: two ways to use them.
+ITEMS['sleeping_pills']={'name':'Sleeping pills','icon':'💊','use':"The blue-key guard's strong sleeping pills. A whole bottle could knock out an entire crew, or make a man look dead."}
+STORY_POINTS['pill_chest']={'zone':'cabin','x':200.0,'reach':26.0,'name':'Sea chest','kind':'chest','item':'sleeping_pills'}
+STORY_POINTS['stew_pot']={'zone':'kitchen','x':1200.0,'reach':24.0,'name':'Stew pot','kind':'stew'}
+STORY_POINTS['cell_floor']={'zone':'cell','x':300.0,'reach':30.0,'name':'Cell floor','kind':'cell_floor'}
+DOCUMENTS['pill_chest']={'title':'Sleeping pills','kicker':'CABIN','body':'A brown bottle of strong sleeping pills belonging to the blue-key guard.','hint':'F opens the chest. E takes the pills.'}
+DOCUMENTS['stew_pot']={'title':'The crew stew','kicker':'GALLEY','body':'A big pot of fish stew bubbles on the stove. Every pirate on board eats from this pot when the cook calls them to the table.','hint':'Something strong in the stew would put the whole crew to sleep.'}
+DOCUMENTS['confirm_castaway']={'title':'Swallow the sleeping pills?','kicker':'A DANGEROUS PLAN','body':'Swallow the whole bottle and lie down on the cold floor of your cell. Your breathing will slow until you look dead.\n\nThe captain wanted you silenced anyway. The crew will not bother with a burial. Whatever they do with your body, you will not wake up for a long time.','hint':'There is no way back from this choice. You can cancel and keep exploring.'}
+ENDINGS['lullaby']={'title':'A lullaby for pirates','subtitle':'Ending 5 of 4 · The drugged stew','body':'The crew snore around the mess table while you take the helm. By the time the first pirate stumbles on deck, the ship lies anchored under the guns of the harbour fort, and the soldiers are already rowing out.'}
+ENDINGS['castaway']={'title':'Castaway','subtitle':'Ending 6 of 4 · Four days adrift','body':'They found you cold and still on the floor of your cell and gave you to the sea in a barrel. For four days the waves carried you. Then the barrel ran aground on the white beach of a small island. Nobody lives here, but you are alive, and you are free.'}
+for ending in ENDINGS.values():ending['subtitle']=ending['subtitle'].replace('of 4','of 6')

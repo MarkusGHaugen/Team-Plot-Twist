@@ -416,6 +416,9 @@ def _base_guard_pose_at(state: GameState, kind: str, guard_elapsed: float, now_m
 
 
 def guard_pose_at(state: GameState, kind: str, guard_elapsed: float, now_ms: int) -> GuardPose:
+    from feast import pose as feast_pose, resumed
+    meal = feast_pose(state,kind,now_ms) or resumed(state,kind,now_ms)
+    if meal is not None: return meal
     from escort import guard_override
     guided=guard_override(state,kind,now_ms)
     if guided is not None:return guided
@@ -432,7 +435,8 @@ def guard_pose_at(state: GameState, kind: str, guard_elapsed: float, now_ms: int
     return pose
 
 
-def _start_alert(state: GameState, guard_elapsed: float, now_ms: int, cell_first: bool=False) -> GameState:
+def _start_alert(state: GameState, guard_elapsed: float, now_ms: int, cell_first: bool=False,
+                 first_goal: Position | None=None) -> GameState:
     paths={};resume={}
     for kind in (*GUARD_ROUTES,'sleeper'):
         if not getattr(state,f'{kind}_alive'): continue
@@ -441,12 +445,17 @@ def _start_alert(state: GameState, guard_elapsed: float, now_ms: int, cell_first
         points=[list(position_xy(start))]
         goals=alert_waypoints(kind)
         if cell_first and kind=='patrol':goals=(Position('cell',180.),Position('hold',410.),*goals)
+        if first_goal is not None:goals=(first_goal,*goals)
         for goal in goals:
             leg=route_points(current,goal)
             points.extend([list(point) for point in leg[1:]])
             current=goal
         # End on the normal route so a quiet alarm can expire without a jump.
         home=start
+        meal=story_progress(state).get('voyage',{}).get('feast')
+        if meal and kind in meal['returns'] and now_ms>=meal['gather']:
+            from feast import back
+            if now_ms<back(meal,kind):home=_position_at_xy(*meal['returns'][kind][-1])
         if kind in ('cargo','sleeper'):
             from voyage import normal_watch_pose
             future,_=normal_watch_pose(state,kind,now_ms+ALERT_DURATION_MS)
@@ -455,6 +464,11 @@ def _start_alert(state: GameState, guard_elapsed: float, now_ms: int, cell_first
         points=[p for i,p in enumerate(points) if i==0 or p!=points[i-1]]
         paths[kind]=points
         resume[kind]=_nearest_route_time('cargo' if kind=='sleeper' else kind,*points[-1])
+    from voyage import progress as voyage_progress, save as voyage_save
+    v=voyage_progress(state)
+    if 'feast' in v:
+        from feast import interrupt
+        state=voyage_save(state,interrupt(state,v,now_ms))
     return replace(state,alert_started_ms=now_ms,alert_until_ms=now_ms+ALERT_DURATION_MS,
                    suspect_started_ms=0,suspect_guard_zone='',suspect_guard_value=0.,
                    alert_paths=json.dumps(paths,separators=(',',':')),
@@ -687,6 +701,8 @@ def state_from_backup(payload: object) -> GameState | None:
     if ending == 'dinghy':
         from voyage import boat_ready
         if not boat_ready(state):return None
+    if ending == 'lullaby' and not v.get('stew_drugged'): return None
+    if ending == 'castaway' and 'sleeping_pills' not in story_progress(state)['items']: return None
     if ending and (state.capture_phase != 'none' or state.hidden_barrel or state.in_hammock): return None
     return state if valid_position(state.position,state.door_open) else None
 
@@ -880,6 +896,7 @@ def can_guard_see(state: GameState, guard_elapsed: float, kind: str='patrol', no
     if e and (e.get('hidden') or kind==('dining' if e['kind']=='cook' else 'boatswain')):return False
     if kind=='cargo' and watch_pose(state,kind,now_ms or 0)[1]:return False
     pose = guard_pose_at(state,kind,guard_elapsed,now_ms) if now_ms is not None else guard_pose_for(kind,guard_elapsed)
+    if pose.segment=='feast_sleep': return False
     px,py = position_xy(state.position)
     if state.position.zone=='cell':
         return kind=='patrol' and state.alert_started_ms<=int(now_ms or 0)<state.alert_until_ms and pose.y==500 and pose.x<=390
@@ -1119,6 +1136,14 @@ def story_action(state: GameState, kind: str, point_id: str, wall_now: int) -> A
     point = STORY_POINTS.get(point_id)
     if point is None or state.position.zone != point['zone'] or abs(state.position.value-point['x']) > point['reach']:
         return ActionResult(state,False,'Move closer to the object.')
+    if kind == 'finish' and point_id == 'cell_floor':
+        if state.reading != 'confirm_castaway':
+            return ActionResult(state,False,'Inspect the exit and confirm your choice first.')
+        if 'sleeping_pills' not in progress['items'] or not opponents_remaining(state):
+            return ActionResult(state,False,'The requirements for this escape are not met.')
+        return ActionResult(replace(state,ending='castaway',reading='',paused_at_ms=0,
+            paused_total_ms=state.paused_total_ms + max(0,wall_now-state.paused_at_ms),
+            alert_started_ms=0,alert_until_ms=0,suspect_started_ms=0),True,ENDINGS['castaway']['title'])
     if kind == 'finish':
         required = 'confirm_takeover' if point_id == 'helm' else 'confirm_crate' if point_id == 'return_crate' else None
         if state.reading != required or required is None:
@@ -1160,6 +1185,12 @@ def story_action(state: GameState, kind: str, point_id: str, wall_now: int) -> A
             progress['crate_open'] = True
             return ActionResult(updated(),True,'You opened crate 07. Press F to hide inside.')
         return ActionResult(updated(),False,'Find a crowbar, or bribe the cook with two coins.')
+    if point_id == 'cell_floor':
+        if 'sleeping_pills' not in progress['items']:
+            return ActionResult(state,False,'The cold, damp floor of your cell.')
+        if not opponents_remaining(state):
+            return ActionResult(state,False,'Nobody is left on board to find you here.')
+        return document('confirm_castaway','Swallow the sleeping pills?')
     if point_id not in progress['inspected']:
         progress['inspected'].append(point_id)
     if point['kind'] == 'chest':
