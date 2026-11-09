@@ -115,7 +115,7 @@ def main():
         unsafe_allow_html=True,
     )
     st.title("🏴‍☠️ Team Plot Twist: Escape from the pirate ship")
-    st.caption("Four ways to freedom · Explore, find clues and choose your escape.")
+    st.caption("Six ways to freedom · Explore, find clues and choose your escape.")
 
     if "playing" not in st.session_state:
         st.session_state.playing = False

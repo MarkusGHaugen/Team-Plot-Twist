@@ -44,6 +44,7 @@ def visible(state,xy,now,elapsed,exclude):
    if sleeping:continue
   else:p=None
   p=p or L.guard_pose_at(state,kind,elapsed,now)
+  if p.segment=='feast_sleep':continue
   vision=L.GUARD_STYLES.get(kind,{'vision':160})['vision']
   if abs(xy[1]-p.y)<=L.VISION_HEIGHT and -14<=(xy[0]-p.x)*p.facing<=vision+20:return True
  return False

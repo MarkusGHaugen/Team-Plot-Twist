@@ -13,7 +13,7 @@ def save(s,v):
  return replace(s,story_state=json.dumps(p,separators=(',',':')))
 
 def valid(v):
- if not isinstance(v,dict) or set(v)-{'coins','claimed','paid','armed','duck','hp','shots','next_fire','watch_start','last_tick','escort','capture_started','guide','concealed','captain_worn','cannon_fired'}:return False
+ if not isinstance(v,dict) or set(v)-{'coins','claimed','paid','armed','duck','hp','shots','next_fire','watch_start','last_tick','escort','capture_started','guide','concealed','captain_worn','cannon_fired','stew_drugged','feast'}:return False
  concealed=v.get('concealed',{})
  if not isinstance(concealed,dict) or any(k not in (*L.GUARD_ROUTES,'sleeper') or b not in {x[0] for x in L.BARRELS} for k,b in concealed.items()):return False
  if len(set(concealed.values()))!=len(concealed) or type(v.get('captain_worn',False)) is not bool:return False
@@ -22,6 +22,10 @@ def valid(v):
  if not isinstance(paid,list) or len(set(paid))!=len(paid) or any(x not in ('cook','boatswain') for x in paid):return False
  if type(v.get('coins',0)) is not int or v.get('coins',0)!=len(claimed)-sum(2 if x=='cook' else 3 for x in paid) or v.get('coins',0)<0:return False
  if any(type(v.get(k,False)) is not bool for k in ('armed','duck')):return False
+ if type(v.get('stew_drugged',False)) is not bool:return False
+ if 'feast' in v:
+  from feast import valid as feast_valid
+  if not v.get('stew_drugged') or not feast_valid(v['feast']):return False
  if type(v.get('hp',2)) is not int or not 0<=v.get('hp',2)<=2:return False
  for k in ('watch_start','last_tick','capture_started','cannon_fired'):
   if k in v and (type(v[k]) is not int or v[k]<0):return False
@@ -59,13 +63,19 @@ def along(path,f):
  return tuple(path[-1])
 
 def watch_pose(s,kind,now):
+ from feast import pose as feast_pose
+ meal=feast_pose(s,kind,now)
+ if meal is not None:return meal,meal.segment=='feast_sleep'
  search=L.search_pose_at(s,kind,now)
  if search is not None:return search,False
  return normal_watch_pose(s,kind,now)
 
 def normal_watch_pose(s,kind,now):
  from logic import GuardPose,Position,route_points
- v=progress(s);t=max(0,(now-v.get('watch_start',now))/1000)%104
+ v=progress(s);f=v.get('feast')
+ from feast import watch_shift
+ shift=watch_shift(f) if f and now>=f['gather'] else 0
+ t=max(0,(now-shift-v.get('watch_start',now))/1000)%104
  # No replacement is created when one member of the pair dies.
  if kind=='cargo' and 'watch_start' not in v:return None,False
  if not (s.sleeper_alive and s.cargo_alive):
@@ -139,6 +149,8 @@ def voyage_action(s,kind,point,wall,elapsed=0):
   pose=guard_pose_at(s,guard,elapsed,now);x,y=L.position_xy(s.position)
   if abs(x-pose.x)>65 or abs(y-pose.y)>25:return no('Move closer to talk.')
   if v['armed']:return no('They will not negotiate during a gunfight.')
+  from feast import active as feast_active
+  if feast_active(s,now):return no('The crew are busy with the stew.')
   if point in v['paid']:return no('You have already paid.')
   if v['coins']<cost:return no(f'You need {cost} coins.')
   if point=='boatswain' and 'sail' not in p['items']:return no('Find a sail before asking for passage.')
@@ -159,7 +171,10 @@ def voyage_action(s,kind,point,wall,elapsed=0):
   if captain_ready(s):
    if now<s.alert_until_ms:return no('Wait until the search settles before commanding the crew.')
    return L.ActionResult(replace(s,ending='command',reading='',paused_at_ms=0),True,"All ahoy! We're heading home.")
-  if L.opponents_remaining(s):return no('Defeat the remaining crew, or conceal the officer and wear the captain uniform.')
+  from feast import crew_asleep
+  if crew_asleep(s,now):
+   return ActionResult(replace(s,ending='lullaby',reading='',paused_at_ms=0,paused_total_ms=s.paused_total_ms+(max(0,wall-s.paused_at_ms) if s.paused_at_ms else 0)),True,'While the crew snore, you take the helm.')
+  if L.opponents_remaining(s):return no('Defeat the remaining crew, conceal the officer and wear the captain uniform, or put the whole crew to sleep.')
   return ActionResult(replace(s,ending='takeover',reading='',paused_at_ms=0,paused_total_ms=s.paused_total_ms+(max(0,wall-s.paused_at_ms) if s.paused_at_ms else 0)),True,'You take the helm.')
  if point=='lifeboat':
   if not boat_ready(s):return no('Find a sail and rope, or bring a sail and bribe the boatswain.')

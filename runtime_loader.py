@@ -7,7 +7,7 @@ import threading
 
 _lock = threading.RLock()
 _revision = None
-_NAMES = ('content', 'logic', 'escort', 'voyage', 'shiplife', 'db', 'action_transport')
+_NAMES = ('content', 'logic', 'escort', 'voyage', 'feast', 'shiplife', 'db', 'action_transport')
 
 def load_backend(root: Path) -> str:
     global _revision
