@@ -344,6 +344,7 @@ function interactionKind(state,position,key,r) {
   if(near("cabin",r.sleeper_x,r.sleeper_range)) return key==="f"?"hammock":"steal_blue";
   if(near("chest_room",r.chest_x,r.chest_range)) return key==="f"?"unlock_chest":"take_pistol";
   const story=storyPoint(position,r);
+  if(story?.[1].kind==='cannon') return 'fire_cannon';
   if(story) return key==="f"?"story_inspect":"story_take";
   const crate=nearProp(position,r.crates,r.crate_range);
   if(crate) return key==="f"?(state.story?.voyage?.armed?"barrel":"search_crate"):crate[0]==="crate_hold_b"?"take_lamp":"empty_pickup";
@@ -812,6 +813,8 @@ function draw(client, canvas, stage, guards) {
   const elapsed = guardElapsed(client.data);
   background(ctx, w, h, cameraX, elapsed);
   ctx.save(); ctx.scale(camera.zoom,camera.zoom); ctx.translate(-camera.x,-camera.y);
+  const fired=client.data.story?.voyage?.cannon_fired;
+  if(fired!==undefined){const shake=cannonMotion(gameNow(client.data)-fired).shake;if(shake)ctx.translate((Math.random()-.5)*shake*2,(Math.random()-.5)*shake*2);}
   ship(ctx, client.data);
   storyDecor(ctx,client.data);
   for(const rat of client.rats||[])drawRat(ctx,rat,performance.now());
@@ -1262,6 +1265,7 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
     else if(client.position.zone==='hammock')setPrompt('F · Get up');
     else if(client.scope) setPrompt('');
     else if(storyPoint(client.position,client.data.rules)?.[1].kind==='telescope') setPrompt('F · Look through the telescope');
+    else if(storyPoint(client.position,client.data.rules)?.[1].kind==='cannon') setPrompt(client.data.story?.voyage?.cannon_fired!==undefined?'The cannon is empty':client.data.has_lamp&&client.data.lamp_lit&&client.data.held_item==='lamp'?'F · Light the fuse and fire the cannon!':'Loaded cannon · hold a lit lamp to light the fuse');
     else if(storyPoint(client.position,client.data.rules)) {
       const [id,p]=storyPoint(client.position,client.data.rules);
       const owned=client.data.story?.items || [];
@@ -1446,11 +1450,49 @@ function drawScope(ctx,w,h,pan,now) {
   ctx.fillText(scopeCaption(pan),cx,Math.min(h-34,cy+r+34));
   ctx.font='13px system-ui';ctx.fillStyle='#bba98a';ctx.fillText('A / D · look around      F · put the telescope away',cx,Math.min(h-12,cy+r+56));ctx.restore();
 }
+// A loaded deck cannon aimed over the bow. Lit with a lamp it hisses, fires,
+// kicks back on its carriage and leaves a drifting cloud of smoke.
+function cannonMotion(age) {
+  const s=age/1000;
+  return {
+    fuse:age<0,
+    flash:age>=0&&age<160,
+    recoil:age<0?0:age<120?22*age/120:22*Math.max(0,1-(age-120)/1500),
+    ball:age>=0&&s<1.8?{dx:-30-620*s,dy:-26-150*s+260*s*s}:null,
+    smoke:age>=0&&s<6?Array.from({length:6},(_,i)=>({dx:-40-i*14-s*(18+i*7),dy:-34-i*3-s*(10+i*4),r:6+i*2+s*(10+i*3),a:Math.max(0,.75-s*.13)*(1-i*.08)})):[],
+    boom:age>=0&&age<1100,
+    shake:age>=0&&age<600?7*(1-age/600):0,
+  };
+}
+function drawCannon(ctx,x,y,firedAt,now) {
+  const age=firedAt===undefined?null:now-firedAt,m=age===null?cannonMotion(-1e9):cannonMotion(age);
+  if(age===null){m.fuse=false;}
+  const cx=x+m.recoil;
+  // Shot rack and powder bucket stay put.
+  ctx.fillStyle='#2b2d2f';for(const [bx,by] of [[x+40,y-5],[x+52,y-5],[x+46,y-15]]){ctx.beginPath();ctx.arc(bx,by,5.5,0,Math.PI*2);ctx.fill();}
+  roundBox(ctx,x+60,y-16,14,16,2,'#6c4a2f','#3a281c');
+  // Carriage, wheels and iron barrel.
+  roundBox(ctx,cx-22,y-22,46,13,2,'#6f4a2e','#3a281c');
+  for(const wx of [cx-14,cx+14]){ctx.fillStyle='#4b3223';ctx.beginPath();ctx.arc(wx,y-6,6.5,0,Math.PI*2);ctx.fill();ctx.fillStyle='#b18452';ctx.beginPath();ctx.arc(wx,y-6,2,0,Math.PI*2);ctx.fill();}
+  ctx.save();ctx.translate(cx+6,y-24);ctx.rotate(-.12);
+  ctx.fillStyle='#2d3133';ctx.beginPath();ctx.moveTo(14,-8);ctx.lineTo(-44,-6);ctx.lineTo(-44,6);ctx.lineTo(14,8);ctx.closePath();ctx.fill();
+  ctx.beginPath();ctx.arc(15,0,8,0,Math.PI*2);ctx.fill();
+  roundBox(ctx,-48,-8,7,16,2,'#3b4043','#202426');line(ctx,-20,-7,-20,7,'#4c5357',3);line(ctx,2,-8,2,8,'#4c5357',3);
+  if(m.fuse){const f=(age%200)/200;ctx.fillStyle=`rgba(255,${180+60*f},90,1)`;ctx.beginPath();ctx.arc(8,-10-3*f,2.5+2*f,0,Math.PI*2);ctx.fill();}
+  if(m.flash){ctx.fillStyle='rgba(255,235,160,.95)';ctx.beginPath();ctx.ellipse(-62,0,22,13,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='rgba(255,140,60,.8)';ctx.beginPath();ctx.ellipse(-56,0,12,8,0,0,Math.PI*2);ctx.fill();}
+  ctx.restore();
+  for(const p of m.smoke){ctx.fillStyle=`rgba(225,222,214,${p.a})`;ctx.beginPath();ctx.arc(x+p.dx,y-30+p.dy,p.r,0,Math.PI*2);ctx.fill();}
+  if(m.ball){ctx.fillStyle='#1d1f20';ctx.beginPath();ctx.arc(x+m.ball.dx,y-30+m.ball.dy,4.5,0,Math.PI*2);ctx.fill();}
+  if(m.fuse)label(ctx,'tsssss…',x-6,y-52,10);
+  if(m.boom){ctx.save();ctx.globalAlpha=Math.max(0,1-age/1100);label(ctx,'BOOM!',x-70,y-70-age/40,30);ctx.restore();}
+  label(ctx,age===null||age<0?'CANNON':'EMPTY CANNON',x-28,y-60,9);
+}
 function storyDecor(ctx,d) {
   const s=d.story || {items:[],inspected:[]};
   for(const [id,p] of Object.entries(d.rules.story_points || {})) {
     const y=p.zone==='mast_top'?d.rules.mast_top_y:d.rules.floors[p.zone][2],x=p.x;
     if(p.kind==='telescope'){drawTelescope(ctx,x,y);continue;}
+    if(p.kind==='cannon'){drawCannon(ctx,x,y,s.voyage?.cannon_fired,gameNow(d));continue;}
     if(p.kind==='coins'){crate(ctx,x-20,y,40,27);if(!(s.voyage?.claimed||[]).includes(id)){ctx.fillStyle='#efc24c';ctx.beginPath();ctx.arc(x,y-35,7,0,Math.PI*2);ctx.fill();}label(ctx,'COINS',x-21,y-49,9);}
     else if(p.kind==='chest') {
       roundBox(ctx,x-25,y-32,50,30,4,'#536e68','#1f3835');

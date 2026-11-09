@@ -13,7 +13,7 @@ def save(s,v):
  return replace(s,story_state=json.dumps(p,separators=(',',':')))
 
 def valid(v):
- if not isinstance(v,dict) or set(v)-{'coins','claimed','paid','armed','duck','hp','shots','next_fire','watch_start','last_tick','escort','capture_started','guide','concealed','captain_worn'}:return False
+ if not isinstance(v,dict) or set(v)-{'coins','claimed','paid','armed','duck','hp','shots','next_fire','watch_start','last_tick','escort','capture_started','guide','concealed','captain_worn','cannon_fired'}:return False
  concealed=v.get('concealed',{})
  if not isinstance(concealed,dict) or any(k not in (*L.GUARD_ROUTES,'sleeper') or b not in {x[0] for x in L.BARRELS} for k,b in concealed.items()):return False
  if len(set(concealed.values()))!=len(concealed) or type(v.get('captain_worn',False)) is not bool:return False
@@ -23,7 +23,7 @@ def valid(v):
  if type(v.get('coins',0)) is not int or v.get('coins',0)!=len(claimed)-sum(2 if x=='cook' else 3 for x in paid) or v.get('coins',0)<0:return False
  if any(type(v.get(k,False)) is not bool for k in ('armed','duck')):return False
  if type(v.get('hp',2)) is not int or not 0<=v.get('hp',2)<=2:return False
- for k in ('watch_start','last_tick','capture_started'):
+ for k in ('watch_start','last_tick','capture_started','cannon_fired'):
   if k in v and (type(v[k]) is not int or v[k]<0):return False
  if not isinstance(v.get('shots',[]),list) or len(v.get('shots',[]))>20:return False
  for b in v.get('shots',[]):

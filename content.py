@@ -177,3 +177,4 @@ ROLES['sleeper']='Blue-key guard'
 
 # Ship life: things to do aboard that are not an escape by themselves.
 STORY_POINTS['telescope']={'zone':'mast_top','x':790.0,'reach':22.0,'name':'Telescope','kind':'telescope'}
+STORY_POINTS['cannon']={'zone':'upper_deck','x':300.0,'reach':34.0,'name':'Deck cannon','kind':'cannon'}

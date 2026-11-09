@@ -432,7 +432,8 @@ def guard_pose_at(state: GameState, kind: str, guard_elapsed: float, now_ms: int
     return pose
 
 
-def _start_alert(state: GameState, guard_elapsed: float, now_ms: int, cell_first: bool=False) -> GameState:
+def _start_alert(state: GameState, guard_elapsed: float, now_ms: int, cell_first: bool=False,
+                 first_goal: Position | None=None) -> GameState:
     paths={};resume={}
     for kind in (*GUARD_ROUTES,'sleeper'):
         if not getattr(state,f'{kind}_alive'): continue
@@ -441,6 +442,7 @@ def _start_alert(state: GameState, guard_elapsed: float, now_ms: int, cell_first
         points=[list(position_xy(start))]
         goals=alert_waypoints(kind)
         if cell_first and kind=='patrol':goals=(Position('cell',180.),Position('hold',410.),*goals)
+        if first_goal is not None:goals=(first_goal,*goals)
         for goal in goals:
             leg=route_points(current,goal)
             points.extend([list(point) for point in leg[1:]])
