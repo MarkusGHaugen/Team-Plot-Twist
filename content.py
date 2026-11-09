@@ -174,3 +174,6 @@ for ending in ENDINGS.values():ending['subtitle']=ending['subtitle'].replace('of
 DOCUMENTS['captains_log']['body']+='\n\nThe officer alone knows the captain’s face. If he disappears, a gold coat and command star might convince the remaining crew.'
 
 ROLES['sleeper']='Blue-key guard'
+
+# Ship life: things to do aboard that are not an escape by themselves.
+STORY_POINTS['telescope']={'zone':'mast_top','x':790.0,'reach':22.0,'name':'Telescope','kind':'telescope'}
