@@ -291,6 +291,42 @@ function ambushTarget(client) {
     .filter(([kind,p])=>d[kind+'_alive']&&p&&Math.abs(p.x-xy.x)<=58&&Math.abs(p.y-xy.y)<=22)
     .sort((a,b)=>Math.abs(a[1].x-xy.x)-Math.abs(b[1].x-xy.x))[0]||null;
 }
+// Rats live in the hold and chest room. They wander between the cargo, stop to
+// sniff, and bolt away squeaking when anyone comes close on their deck.
+const RAT_FLOOR=500,RAT_MIN=420,RAT_MAX=1350,RAT_FEAR=95;
+function ratRandom(seed){let s=seed>>>0;return ()=>{s=(Math.imul(s,1664525)+1013904223)>>>0;return s/4294967296;};}
+function initRats(){return [480,705,960,1225].map((x,i)=>({x,dir:i%2?-1:1,mode:'sniff',until:0,speed:0,squeak:0,rand:ratRandom(97+i*31)}));}
+function stepRats(rats,dt,threats,now) {
+  for(const r of rats) {
+    const near=threats.filter(t=>Math.abs(t.y-RAT_FLOOR)<20).map(t=>t.x-r.x).sort((a,b)=>Math.abs(a)-Math.abs(b))[0];
+    if(near!==undefined&&Math.abs(near)<RAT_FEAR) {
+      if(r.mode!=='flee')r.squeak=now+800;
+      r.mode='flee';r.dir=near>0?-1:1;r.speed=260;r.until=now+900+r.rand()*500;
+    } else if(now>=r.until) {
+      if(r.mode==='flee'||r.rand()<.45){r.mode='sniff';r.speed=0;r.until=now+700+r.rand()*1800;}
+      else {r.mode='scurry';r.dir=r.rand()<.5?-1:1;r.speed=70+r.rand()*60;r.until=now+500+r.rand()*1400;}
+    }
+    r.x+=r.dir*r.speed*dt;
+    if(r.x<RAT_MIN){r.x=RAT_MIN;r.dir=1;}
+    if(r.x>RAT_MAX){r.x=RAT_MAX;r.dir=-1;}
+  }
+  return rats;
+}
+function drawRat(ctx,r,now) {
+  const t=now/1000,run=r.speed>0,bob=run?Math.sin(t*38+r.x)*1.2:0,sniff=run?0:Math.sin(t*14+r.x)*1.5;
+  ctx.save();ctx.translate(r.x,RAT_FLOOR-4+bob);ctx.scale(r.dir,1);
+  ctx.strokeStyle='#8f6f66';ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(-9,0);
+  ctx.quadraticCurveTo(-17,-2+Math.sin(t*9+r.x)*3,-25,2);ctx.stroke();
+  ctx.fillStyle='#4f4440';ctx.beginPath();ctx.ellipse(0,-3,10,5,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(9+sniff*.4,-4,5,3.4,-.15,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#d79a90';ctx.beginPath();ctx.arc(14+sniff*.5,-4,1.3,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#6d5a54';ctx.beginPath();ctx.arc(7,-8,2.6,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#111';ctx.beginPath();ctx.arc(11,-5,.9,0,Math.PI*2);ctx.fill();
+  const step=run?Math.sin(t*40+r.x)*2.5:0;
+  line(ctx,-5,0,-5+step,3,'#3c322f',1.5);line(ctx,5,0,5-step,3,'#3c322f',1.5);
+  ctx.restore();
+  if(now<r.squeak)label(ctx,'squeak!',r.x-18,RAT_FLOOR-16-(800-(r.squeak-now))/40,9);
+}
 function drawCaptor(ctx,client,player,elapsed) {
   const kind=client.capture.kind||client.data.capture_guard,style=client.data.rules.guard_styles[kind]||client.data.rules.guard_styles.patrol;
   person(ctx,client.capture.guard.x,client.capture.guard.y,true,elapsed,kind==='patrol'&&!client.data.has_key?'cell_key':'none',client.capture.guard.x<player.x?'right':'left',true,false,kind,style);
@@ -776,6 +812,7 @@ function draw(client, canvas, stage, guards) {
   ctx.save(); ctx.scale(camera.zoom,camera.zoom); ctx.translate(-camera.x,-camera.y);
   ship(ctx, client.data);
   storyDecor(ctx,client.data);
+  for(const rat of client.rats||[])drawRat(ctx,rat,performance.now());
   // The hat belongs to the scenery layer; a passing guard walks in front.
   if(client.ambushUntil>performance.now()){const p=positionXY(client.position,client.data.rules);line(ctx,p.x-20,p.y-55,p.x+20,p.y-65,'#d8b580',6);}
   if(client.data.hidden_barrel && !client.capture) {
@@ -1156,6 +1193,9 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
     });
     const guards=Object.fromEntries(Object.keys(client.data.guard_routes).map(kind=>[kind,guardPose(client.data,kind)]));
     const guard=guards.patrol;
+    const threats=Object.entries(guards).filter(([kind])=>client.data[kind+'_alive']).map(([,g])=>g);
+    if(!client.data.hidden_barrel)threats.push(positionXY(client.position,client.data.rules));
+    client.rats=stepRats(client.rats||initRats(),frozen?0:dt,threats,now);
     if(!frozen && !client.capture && !client.capturePending && client.data.capture_phase==="none" && !client.data.story?.voyage?.escort?.hidden){
       const spotted=Object.entries(guards).find(([kind,pose])=>guardCanSee(client,pose,kind));
       if(spotted){
