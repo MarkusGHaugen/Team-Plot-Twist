@@ -204,8 +204,12 @@ def apply_action(conn: sqlite3.Connection,kind: str,position: Position,guard_ela
     if facing in ('left','right'): candidate=replace(candidate,facing=facing)
     now_ms = game_now_ms(state, wall_now)
     from voyage import voyage_action,ambush
+    from shiplife import fire_cannon
+    from feast import drug_stew
     actions = {
         'ambush':lambda:ambush(candidate,item or '',now_ms,guard_elapsed),
+        'fire_cannon':lambda:fire_cannon(candidate,guard_elapsed,now_ms or 0),
+        'drug_stew':lambda:drug_stew(candidate,guard_elapsed,now_ms or 0),
         'voyage_tick':lambda:voyage_action(candidate,'tick','',wall_now,guard_elapsed),
         'bribe':lambda:voyage_action(candidate,'bribe',item or '',wall_now,guard_elapsed),
         'toggle_duck':lambda:voyage_action(candidate,'toggle_duck','',wall_now),
