@@ -361,6 +361,66 @@ function ambushTarget(client) {
     .filter(([kind,p])=>d[kind+'_alive']&&p&&Math.abs(p.x-xy.x)<=58&&Math.abs(p.y-xy.y)<=22)
     .sort((a,b)=>Math.abs(a[1].x-xy.x)-Math.abs(b[1].x-xy.x))[0]||null;
 }
+// Barrel ambush cutscene: pop up, grab the crew member, haul them over the rim
+// and stuff them head first into the barrel, then settle back to just the hat.
+const AMBUSH_MS=1500;
+function easeInOut(t){return t<.5?2*t*t:1-2*(1-t)*(1-t);}
+function quadPoint(a,b,c,t){const u=1-t;return {x:u*u*a.x+2*u*t*b.x+t*t*c.x,y:u*u*a.y+2*u*t*b.y+t*t*c.y};}
+function ambushMotion(a,ms) {
+  const rim=a.by-47,side=a.x>=a.bx?1:-1,turn=-side*Math.PI;
+  const start={x:a.x,y:a.y-35},grabbed={x:a.x-side*7,y:a.y-37},peak={x:a.bx+side*14,y:rim-80},dip={x:a.bx,y:rim+5};
+  let phase,lift,guard=null,angle=0,kick=false,startled=false,wobble=0;
+  if(ms<180){phase='pop';lift=1-(1-ms/180)**2;guard=start;}
+  else if(ms<420){phase='grab';const u=(ms-180)/240;lift=1;startled=true;
+    guard={x:start.x+(grabbed.x-start.x)*u,y:start.y+(grabbed.y-start.y)*u};angle=-side*.16*u;}
+  else if(ms<900){phase='haul';const u=easeInOut((ms-420)/480);lift=1-.75*u;
+    guard=quadPoint(grabbed,peak,dip,u);angle=-side*.16+(turn+side*.16)*u;}
+  else if(ms<1150){phase='plunge';const u=(ms-900)/250;lift=.25*Math.max(0,1-u*3);kick=true;
+    guard={x:a.bx,y:dip.y+(rim+52-dip.y)*u*u};angle=turn+Math.sin(ms/22)*.1*(1-u);}
+  else {phase=ms<AMBUSH_MS?'settle':'done';lift=0;const u=clamp((ms-1150)/(AMBUSH_MS-1150),0,1);
+    wobble=Math.sin(u*Math.PI*5)*.08*(1-u);}
+  // Hands hold the collar: the shoulder point of the rotated body.
+  const hands=guard&&lift>.05?{x:guard.x+9*Math.sin(angle),y:guard.y-9*Math.cos(angle)}:null;
+  return {phase,lift,guard,angle,kick,startled,wobble,hands,side,rim,done:ms>=AMBUSH_MS};
+}
+function barrelLurker(ctx,x,rim,lift,hands,coat,hatColor,band) {
+  const head=rim+8-34*lift,brim=head-9;
+  ctx.save();ctx.beginPath();ctx.rect(x-200,rim-300,400,300);ctx.clip();
+  if(hands&&lift>.05) for(const s of [-1,1]) {
+    const sx=x+s*10,sy=head+17,hx=hands.x+s*5,hy=hands.y+s*3;
+    const ex=(sx+hx)/2+s*4,ey=Math.min(sy,hy)-8;
+    line(ctx,sx,sy,ex,ey,coat,6);line(ctx,ex,ey,hx,hy,coat,6);
+    ctx.fillStyle='#d0a173';ctx.beginPath();ctx.arc(hx,hy,4,0,Math.PI*2);ctx.fill();
+  }
+  if(lift>.02){
+    roundBox(ctx,x-12,head+9,24,32,5,coat,'#2c2927');
+    ctx.fillStyle='#d0a173';ctx.beginPath();ctx.arc(x,head,10,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#272622';ctx.beginPath();ctx.arc(x+(hands&&hands.x<x?-4:4),head-1,1.5,0,Math.PI*2);ctx.fill();
+  }
+  ctx.fillStyle=hatColor;ctx.beginPath();ctx.moveTo(x-17,brim);ctx.lineTo(x-9,brim-12);
+  ctx.lineTo(x+8,brim-12);ctx.lineTo(x+17,brim);ctx.fill();
+  line(ctx,x-20,brim,x+20,brim,band,4);
+  ctx.restore();
+}
+function drawAmbush(ctx,client,anim,now) {
+  const d=client.data,m=ambushMotion(anim,now-anim.start),vv=d.story?.voyage||{};
+  const coat=vv.captain_worn?d.rules.guard_styles.officer.color:d.disguised?'#9c3d33':'#2d6b73';
+  const lurk=()=>barrelLurker(ctx,anim.bx,m.rim,m.lift,m.hands,coat,d.disguised?'#302b29':'#273a40','#c6b180');
+  if(m.kick)lurk();
+  if(m.guard){
+    // Everything inside the barrel below its rim stays hidden.
+    ctx.save();ctx.beginPath();ctx.rect(anim.bx-4000,anim.by-4000,8000,8000);ctx.rect(anim.bx-21,m.rim+1,42,80);ctx.clip('evenodd');
+    ctx.save();ctx.translate(m.guard.x,m.guard.y);ctx.rotate(m.angle);
+    person(ctx,0,35,true,m.kick?(now-anim.start)/260:0,'none',anim.x>=anim.bx?'left':'right',m.kick,false,anim.kind,d.rules.guard_styles[anim.kind]||null,false);
+    ctx.restore();ctx.restore();
+    if(m.startled)label(ctx,'!',m.guard.x-5,m.guard.y-50,25);
+  }
+  if(m.wobble){ctx.save();ctx.translate(anim.bx,anim.by);ctx.rotate(m.wobble);barrel(ctx,0,0,1);ctx.restore();}
+  if(m.phase==='settle'){const u=(now-anim.start-1150)/(AMBUSH_MS-1150);ctx.fillStyle=`rgba(214,190,150,${.5*(1-u)})`;
+    for(const s of [-1,1]){ctx.beginPath();ctx.arc(anim.bx+s*(22+18*u),m.rim-4-6*u,4+5*u,0,Math.PI*2);ctx.fill();}}
+  if(!m.kick)lurk();
+  return m;
+}
 // Rats live in the hold and chest room. They wander between the cargo, stop to
 // sniff, and bolt away squeaking when anyone comes close on their deck.
 const RAT_FLOOR=500,RAT_MIN=420,RAT_MAX=1350,RAT_FEAR=95;
@@ -711,12 +771,14 @@ function crouchingPerson(ctx,x,y,guard,elapsed,held,facing,moving,disguised,vari
   else if(held?.includes('key')){const c=held==='blue_key'?'#6cb6ff':'#ffe296';ctx.strokeStyle=c;ctx.lineWidth=3;ctx.beginPath();ctx.arc(27,-22,4,0,Math.PI*2);ctx.stroke();line(ctx,29,-18,33,-10,c,3);}
   ctx.restore();
 }
-function person(ctx, x, feetY, guard, elapsed, held = "none", facing = "right", moving = true, disguised = false, variant="patrol", style=null) {
+function person(ctx, x, feetY, guard, elapsed, held = "none", facing = "right", moving = true, disguised = false, variant="patrol", style=null, shadow=true) {
   const pace = moving ? Math.sin(elapsed * (guard ? 10 : 11)) * 3 : 0;
   const uniform = guard || disguised;
   ctx.save(); ctx.translate(x, feetY);
-  ctx.fillStyle = "rgba(15,18,20,.27)";
-  ctx.beginPath(); ctx.ellipse(0, 3, 15, 4, 0, 0, Math.PI * 2); ctx.fill();
+  if (shadow) {
+    ctx.fillStyle = "rgba(15,18,20,.27)";
+    ctx.beginPath(); ctx.ellipse(0, 3, 15, 4, 0, 0, Math.PI * 2); ctx.fill();
+  }
   line(ctx, -6, -17, -7 + pace, -2, "#2d2927", 6);
   line(ctx, 6, -17, 7 - pace, -2, "#2d2927", 6);
   line(ctx, -7 + pace, -2, -11 + pace, 0, "#241f1e", 6);
@@ -890,8 +952,10 @@ function draw(client, canvas, stage, guards) {
   storyDecor(ctx,client.data);
   for(const rat of client.rats||[])drawRat(ctx,rat,performance.now());
   // The hat belongs to the scenery layer; a passing guard walks in front.
-  if(client.ambushUntil>performance.now()){const p=positionXY(client.position,client.data.rules);line(ctx,p.x-20,p.y-55,p.x+20,p.y-65,'#d8b580',6);}
-  if(client.data.hidden_barrel && !client.capture) {
+  const anim=client.ambushAnim;
+  if(anim&&(!client.data.hidden_barrel||client.capture||performance.now()-anim.start>=AMBUSH_MS))client.ambushAnim=null;
+  if(client.ambushAnim)drawAmbush(ctx,client,client.ambushAnim,performance.now());
+  else if(client.data.hidden_barrel && !client.capture) {
     ctx.fillStyle=client.data.disguised?"#302b29":"#273a40";
     ctx.beginPath();ctx.moveTo(player.x-17,player.y-47);ctx.lineTo(player.x-9,player.y-59);
     ctx.lineTo(player.x+8,player.y-59);ctx.lineTo(player.x+17,player.y-47);ctx.fill();
@@ -1019,7 +1083,8 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
     client.actionInFlight = false;
     client.inFlightPayload = null;
     if (data.feedback?.accepted) {
-      if(client.inFlightKind==='ambush')client.ambushUntil=performance.now()+650;
+      if(client.inFlightKind==='ambush'&&client.ambushSnap){const b=positionXY(client.position,data.rules);
+        client.ambushAnim={...client.ambushSnap,bx:b.x,by:b.y,start:performance.now()};}
       if ((client.inFlightKind!=="voyage_tick" || data.story?.voyage?.escort || client.wasEscorted) && ["restart_prompt","barrel","hammock","capture","capture_complete","story_inspect","journal","story_finish","voyage_tick","bribe"].includes(client.inFlightKind)) {
       client.position = { zone: data.position.zone, value: Number(data.position.value) };
       client.lastSent = snapshot(client.position);
@@ -1149,8 +1214,12 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
     if(k === "escape"){client.inventoryOpen=false;client.scope=null;return;}
     if(k === "j" && !event.repeat) {event.preventDefault();action("journal");return;}
     if(client.data.capture_phase === "active" || client.capturePending) return;
+    if(client.ambushAnim && (k==='e'||k==='f')) {event.preventDefault();return;}
     if(client.data.hidden_barrel && k==='e') {
-      event.preventDefault();if(!event.repeat)action('ambush',ambushTarget(client)?.[0]||'');return;
+      event.preventDefault();if(event.repeat)return;
+      const target=ambushTarget(client);
+      client.ambushSnap=target?{kind:target[0],x:target[1].x,y:target[1].y}:null;
+      action('ambush',target?.[0]||'');return;
     }
     if(client.data.hidden_barrel && k !== "f") {
       if(!event.repeat){client.flashText="Press F to leave the barrel first.";client.flashUntil=performance.now()+1800;}

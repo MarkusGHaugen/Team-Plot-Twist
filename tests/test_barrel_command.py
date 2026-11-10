@@ -157,3 +157,31 @@ def test_captain_must_wait_until_current_search_ends(monkeypatch):
  denied=story_action(s,'inspect','helm',3000)
  assert not denied.accepted and denied.state==s
  assert story_action(s,'inspect','helm',22000).state.ending=='command'
+
+
+def test_canvas_ambush_cutscene_pulls_crew_head_first_into_barrel():
+ from test_canvas_rules import canvas
+ result=canvas(r'''(()=>{
+ const out={};
+ for(const side of [1,-1]){
+  const a={kind:'patrol',x:410+side*45,y:245,bx:410,by:245};
+  out[side]=[0,90,300,420,660,899,1000,1149,1300,1500].map(ms=>({ms,...ambushMotion(a,ms)}));
+ }
+ return out;
+ })()''',{})
+ import math
+ for side,frames in result.items():
+  side=int(side);m={f['ms']:f for f in frames}
+  rim=245-47
+  # Starts where the crew member stood, upright, with the player popping out.
+  assert m[0]['guard']=={'x':410+side*45,'y':210} and m[0]['angle']==0
+  assert m[0]['lift']<m[90]['lift']<=1 and m[300]['lift']==1
+  assert m[300]['startled'] and m[300]['hands'] is not None
+  # Hauled over the rim and turned fully upside down (head first) toward the barrel.
+  assert min(f['guard']['y'] for f in frames if f['guard'] and 420<=f['ms']<900)<rim-30
+  assert m[899]['angle']==pytest.approx(-side*math.pi,abs=.02)
+  assert abs(m[899]['guard']['x']-410)<2
+  # Plunge: legs kick while sinking below the rim, then only the hat remains.
+  assert m[1000]['kick'] and m[1149]['guard']['y']-35>rim
+  assert m[1300]['guard'] is None and m[1300]['lift']==0 and m[1300]['phase']=='settle'
+  assert m[1500]['done'] and m[1500]['wobble']==0
