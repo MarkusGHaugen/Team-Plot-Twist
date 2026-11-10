@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import re
 import time
@@ -26,6 +28,7 @@ from content import DOCUMENTS, ENDINGS, ITEMS, ROLES, STORY_POINTS
 ROOT = Path(__file__).resolve().parent
 DB_PATH = Path(os.environ.get("TEAM_PLOT_TWIST_DB", ROOT / "data" / "team-progress.sqlite3"))
 COMPONENT_DIR = ROOT / "game_component"
+STATIC_BUILD_DIR = ROOT / "static" / "build"
 
 st.set_page_config(
     page_title="Team Plot Twist · Escape from the pirate ship",
@@ -106,12 +109,50 @@ def cached_component(name, html, css, js):
     return st.components.v2.component(name=name, html=html, css=css, js=js)
 
 
+def publish_script(name, source):
+    """Serve source as a static file named by its content hash; return its URL.
+
+    A new name for every change means browsers can cache the file and still
+    never run an outdated version after a deployment.
+    """
+    digest = hashlib.sha256(source.encode("utf-8")).hexdigest()[:16]
+    target = STATIC_BUILD_DIR / f"{name}-{digest}.js"
+    if not target.exists():
+        STATIC_BUILD_DIR.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_name(f"{target.name}.{uuid.uuid4().hex}.tmp")
+        temporary.write_text(source, encoding="utf-8")
+        os.replace(temporary, target)
+        for old in STATIC_BUILD_DIR.glob(f"{name}-*.js"):
+            if old != target:
+                old.unlink(missing_ok=True)
+    return f"app/static/build/{target.name}"
+
+
+# Streamlit sends a component's inline code with every run. Inlining the game
+# (over 120 KB) made every key press download it again, so the inline part is
+# only this loader and the browser fetches the game file once.
+GAME_LOADER = """
+const source = new URL(%s, document.baseURI).href;
+export default function (args) {
+  let cleanup = null, gone = false;
+  import(source).then(game => { if (!gone) cleanup = game.default(args); }).catch(error => {
+    console.error("Team Plot Twist could not load the game", error);
+    const note = document.createElement("p");
+    note.textContent = "The game could not load. Reload the page to try again.";
+    args.parentElement.prepend(note);
+  });
+  return () => { gone = true; if (typeof cleanup === "function") cleanup(); };
+}
+"""
+
+
 def game_component():
+    script = publish_script("game", (COMPONENT_DIR / "game.js").read_text(encoding="utf-8"))
     return cached_component(
         "team_plot_twist_canvas_game",
         (COMPONENT_DIR / "game.html").read_text(encoding="utf-8"),
         (COMPONENT_DIR / "game.css").read_text(encoding="utf-8"),
-        (COMPONENT_DIR / "game.js").read_text(encoding="utf-8"),
+        GAME_LOADER % json.dumps(script),
     )
 
 
