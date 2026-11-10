@@ -634,6 +634,7 @@ function ship(ctx, data) {
   line(ctx,760,50,445,211,"#665341",2); line(ctx,760,50,1060,211,"#665341",2);
   ctx.fillStyle="rgba(250,230,187,.25)";
   ctx.beginPath();ctx.moveTo(748,61);ctx.lineTo(548,210);ctx.lineTo(746,210);ctx.fill();
+  drawGalleyWall(ctx);
   // A complete bed and searchable cargo. Round barrels are hiding places.
   roundBox(ctx,176,456,118,12,2,"#a57b51","#3a2a21");
   roundBox(ctx,183,432,104,25,4,"#6d8180","#38423c");
@@ -690,12 +691,7 @@ function ship(ctx, data) {
   // A small bench, bowl and cooking pot make the dining guard's routine legible.
   roundBox(ctx,1078,348,56,8,2,"#785337","#35281f");
   ctx.fillStyle="#e1c48a";ctx.beginPath();ctx.ellipse(1100,317,16,5,0,0,Math.PI*2);ctx.fill();
-  roundBox(ctx,1183,194,43,25,6,"#4f5552","#2b2c2b");
-  line(ctx,1186,190,1222,190,"#c3b084",4);
-  roundBox(ctx,1100,200,80,40,4,"#42453f","#332720");
-  for (let i=0;i<3;i++){ctx.fillStyle="#e2a762";ctx.beginPath();ctx.arc(1118+i*24,215,6,0,Math.PI*2);ctx.fill();}
-  roundBox(ctx,1210,212,110,12,2,"#684630","#35291f");
-  line(ctx,1220,226,1220,241,"#523a2a",6);line(ctx,1300,226,1300,241,"#523a2a",6);
+  drawGalley(ctx,data);
   // The chest keeps its body and rim even after the pistol is taken.
   roundBox(ctx,1078,460,85,40,3,"#8b5a35","#34251e");
   line(ctx,1083,482,1158,482,"#c59157",3);
@@ -711,13 +707,101 @@ function ship(ctx, data) {
   label(ctx,"CELL",165,403,14);label(ctx,"HOLD",650,408,14);
   label(ctx,"CHEST ROOM",1180,408,14);label(ctx,"CABIN",166,271,14);
   label(ctx,"MIDDLE DECK",650,273,14);label(ctx,"MESS HALL",1140,274,14);
-  label(ctx,"UPPER DECK",680,164,14);label(ctx,"GALLEY",1210,165,15);
+  label(ctx,"UPPER DECK",680,164,14);label(ctx,"GALLEY",1252,167,15);
   for(const [zone,[name]] of Object.entries(data.rules.rooms)) {
     const [left,,y]=data.rules.floors[zone];label(ctx,name,left+24,y-91,14);
   }
   ctx.restore();
 }
 
+// The galley is a planked deckhouse on the upper deck (x 1040-1370, floor 245).
+// The wall is drawn before the barrels so the galley barrel stays in front.
+function drawGalleyWall(ctx) {
+  ctx.fillStyle="#6b4a32";ctx.fillRect(1046,150,318,94);
+  for(let y=163;y<244;y+=13) line(ctx,1046,y,1364,y,"#583c29",2);
+  for(const x of [1120,1252,1318]) line(ctx,x,150,x,244,"#5f412c",2);
+  line(ctx,1043,150,1367,150,"#3a281e",9);
+  for(const x of [1047,1363]) line(ctx,x,150,x,244,"#3a281e",6);
+  // A brass porthole lets in a little sky.
+  ctx.fillStyle="#2c4a58";ctx.beginPath();ctx.arc(1080,188,13,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle="rgba(190,220,230,.25)";ctx.beginPath();ctx.arc(1076,184,6,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle="#c9a35f";ctx.lineWidth=4;ctx.beginPath();ctx.arc(1080,188,13,0,Math.PI*2);ctx.stroke();
+}
+// The iron range, the crew's stew pot and the cook's tools. Fire, bubbles and
+// steam move with time; a drugged stew shows pale specks of crushed pills.
+function drawGalley(ctx,data,now=performance.now()) {
+  const t=now/1000,drugged=Boolean(data.story?.voyage?.stew_drugged);
+  const flicker=.78+.22*Math.sin(t*9.1)*Math.sin(t*5.3+1.2);
+  ctx.save();
+  // Warm firelight on the wall behind the range.
+  const glow=ctx.createRadialGradient(1192,228,6,1192,228,120);
+  glow.addColorStop(0,`rgba(255,150,60,${.32*flicker})`);glow.addColorStop(1,"rgba(255,150,60,0)");
+  ctx.fillStyle=glow;ctx.fillRect(1072,150,240,94);
+  // Pans and a ladle hang from a rail; onions and herbs dry beside them.
+  line(ctx,1104,160,1156,160,"#3f2c21",4);
+  for(const [x,r] of [[1114,10],[1140,8]]) {
+    line(ctx,x,160,x,174-r,"#2f2a26",2);
+    ctx.fillStyle="#2b2927";ctx.beginPath();ctx.arc(x,174,r,0,Math.PI*2);ctx.fill();
+    line(ctx,x,174-r,x,164,"#2b2927",3);
+    ctx.strokeStyle="#55504a";ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(x,174,r-2,Math.PI*.9,Math.PI*1.6);ctx.stroke();
+  }
+  line(ctx,1153,161,1153,186,"#a58a62",2);ctx.fillStyle="#a58a62";ctx.beginPath();ctx.ellipse(1153,189,4,3,0,0,Math.PI*2);ctx.fill();
+  line(ctx,1352,152,1352,192,"#8f7a4c",2);
+  for(let i=0;i<4;i++){ctx.fillStyle=i%2?"#c9874a":"#d79b56";ctx.beginPath();ctx.ellipse(1352+(i%2?3:-3),160+i*8,5,5.5,0,0,Math.PI*2);ctx.fill();}
+  // A shelf of jars, crocks and plates above the prep table.
+  roundBox(ctx,1252,186,64,6,1,"#7d5838","#3a281e");
+  for(const [x,h,c] of [[1258,13,"#c9b98e"],[1270,17,"#7f8f73"],[1284,11,"#b56c46"]]) roundBox(ctx,x,186-h,10,h,3,c,"#3c2d22");
+  for(const x of [1300,1308]){ctx.fillStyle="#e3d7b6";ctx.beginPath();ctx.ellipse(x,178,4,8,0,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#8a7a5a";ctx.lineWidth=1;ctx.stroke();}
+  // Chimney pipe through the deckhouse roof.
+  line(ctx,1234,206,1234,150,"#262626",10);line(ctx,1234,206,1234,150,"#3a3a3a",3);
+  for(const y of [170,192]) line(ctx,1228,y,1240,y,"#1b1b1b",3);
+  // Brick hearth and the cast iron range.
+  roundBox(ctx,1154,236,92,9,2,"#8b4a35","#4a2a20");
+  for(const x of [1170,1192,1214,1236]) line(ctx,x,237,x,244,"#5e3326",1.5);
+  roundBox(ctx,1160,204,80,34,4,"#2d2e2d","#141414");
+  roundBox(ctx,1156,201,88,7,2,"#454746","#181818");
+  // Firebox: glowing coals behind an iron grate.
+  ctx.fillStyle=`rgb(255,${110+70*flicker|0},40)`;ctx.shadowColor="#ff8a3a";ctx.shadowBlur=14*flicker;
+  roundBox(ctx,1172,213,32,19,3,ctx.fillStyle,"#151515");ctx.shadowBlur=0;
+  for(let i=0;i<4;i++){const fx=1177+i*8,fh=5+4*Math.abs(Math.sin(t*7+i*1.7));ctx.fillStyle="rgba(255,226,120,.9)";ctx.beginPath();ctx.moveTo(fx-3,231);ctx.quadraticCurveTo(fx,231-fh*2,fx+3,231);ctx.fill();}
+  for(const x of [1180,1188,1196]) line(ctx,x,213,x,232,"#1b1b1b",2);
+  // Oven door with a brass latch, and rivets along the range.
+  roundBox(ctx,1211,212,22,20,2,"#383938","#151515");
+  line(ctx,1215,222,1229,222,"#c8a25a",3);
+  ctx.fillStyle="#6a6b69";for(const x of [1164,1236])for(const y of [208,234]){ctx.beginPath();ctx.arc(x,y,1.6,0,Math.PI*2);ctx.fill();}
+  // The big stew pot on the range: iron body, handles, rim and stew surface.
+  ctx.fillStyle="#222";ctx.beginPath();ctx.moveTo(1170,181);ctx.lineTo(1230,181);
+  ctx.quadraticCurveTo(1233,202,1214,202);ctx.lineTo(1186,202);ctx.quadraticCurveTo(1167,202,1170,181);ctx.fill();
+  ctx.strokeStyle="#4b4b4b";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(1175,185);ctx.quadraticCurveTo(1174,197,1186,199);ctx.stroke();
+  for(const s of [-1,1]){ctx.strokeStyle="#3c3c3c";ctx.lineWidth=3;ctx.beginPath();ctx.arc(1200+s*33,186,5,s>0?-Math.PI/2:Math.PI/2,s>0?Math.PI/2:Math.PI*1.5);ctx.stroke();}
+  ctx.fillStyle=drugged?"#a07a52":"#8a552b";ctx.beginPath();ctx.ellipse(1200,181,29,5,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle="rgba(240,170,90,.35)";ctx.beginPath();ctx.ellipse(1194,180,12,2,0,0,Math.PI*2);ctx.fill();
+  if(drugged) for(let i=0;i<7;i++){const a=t*.8+i*.9;ctx.fillStyle="rgba(238,232,255,.85)";ctx.beginPath();ctx.arc(1200+Math.cos(a)*(8+i*2.4),181+Math.sin(a)*1.8,1.2,0,Math.PI*2);ctx.fill();}
+  for(let i=0;i<5;i++){const p=(t*1.2+i*.37)%1,bx=1184+i*8+Math.sin(i*2.1)*3;
+    ctx.strokeStyle=`rgba(${drugged?'225,210,190':'200,140,80'},${.9*(1-p)})`;ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(bx,180-p*1.5,1+2.2*p,0,Math.PI*2);ctx.stroke();}
+  ctx.strokeStyle="#5a5a5a";ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(1200,181,30,5.5,0,0,Math.PI*2);ctx.stroke();
+  // A wooden ladle rests in the stew.
+  line(ctx,1210,181,1236,160,"#9a774e",3);ctx.fillStyle="#9a774e";ctx.beginPath();ctx.arc(1237,159,2.5,0,Math.PI*2);ctx.fill();
+  // Steam curls up and fades under the roof.
+  for(let i=0;i<3;i++){const p=(t*.35+i/3)%1,sx=1188+i*11+Math.sin(t*1.6+i*2)*5*p;
+    ctx.fillStyle=`rgba(235,230,220,${.32*(1-p)*Math.min(1,p*4)})`;
+    ctx.beginPath();ctx.arc(sx,176-p*24,4+7*p,0,Math.PI*2);ctx.fill();}
+  // Firewood by the range.
+  for(const [x,y] of [[1136,239],[1146,239],[1141,231]]){ctx.fillStyle="#7a4f30";ctx.beginPath();ctx.ellipse(x,y,6,4.5,0,0,Math.PI*2);ctx.fill();ctx.fillStyle="#c49766";ctx.beginPath();ctx.ellipse(x,y,3,2.2,0,0,Math.PI*2);ctx.fill();}
+  // Prep table: cutting board, a fish, a knife and bread.
+  roundBox(ctx,1252,212,58,7,2,"#7b5435","#35291f");
+  line(ctx,1258,219,1258,243,"#5a3d2a",5);line(ctx,1304,219,1304,243,"#5a3d2a",5);
+  line(ctx,1258,232,1304,232,"#5a3d2a",3);
+  roundBox(ctx,1257,207,30,5,1,"#c9a46b","#6d5233");
+  ctx.fillStyle="#9fb1b5";ctx.beginPath();ctx.ellipse(1270,204,10,3.5,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.moveTo(1259,204);ctx.lineTo(1253,200);ctx.lineTo(1253,208);ctx.fill();
+  ctx.fillStyle="#222";ctx.beginPath();ctx.arc(1276,203,.9,0,Math.PI*2);ctx.fill();
+  line(ctx,1283,209,1296,207,"#cfd3d3",2);line(ctx,1296,207,1301,206,"#4a3324",3);
+  ctx.fillStyle="#c08446";ctx.beginPath();ctx.ellipse(1300,207,8,4.5,0,Math.PI,0);ctx.fill();
+  // Sacks of flour and potatoes by the door.
+  for(const [x,c] of [[1066,"#d6c49a"],[1088,"#b59a6a"]]){ctx.fillStyle=c;ctx.beginPath();ctx.moveTo(x-11,243);ctx.quadraticCurveTo(x-13,222,x-5,216);ctx.lineTo(x+5,216);ctx.quadraticCurveTo(x+13,222,x+11,243);ctx.closePath();ctx.fill();line(ctx,x-5,219,x+5,219,"#6e5a3a",2);}
+  ctx.restore();
+}
 function expandedDecor(ctx,rules) {
   // Original, simple furnishings identify rooms without adding invisible walls.
   for(const x of [1510,1570,1630]) {
