@@ -21,7 +21,7 @@ uv run pytest -q
 
 ## Single player or multiplayer
 
-Choose **Single player** or **Multiplayer** above the game. In multiplayer one player presses **Create room** and shares the six-letter code; the other enters it and presses **Join**. Both start in the cell and see each other move live. Multiplayer is in beta: each player still has their own ship, so doors, items and guards are not shared yet. Setup of the Ably key is described in [CONTRIBUTING.md](CONTRIBUTING.md#multiplayer-setup-ably).
+Choose **Single player** or **Multiplayer** above the game. In multiplayer one player presses **Create room** and shares the six-letter code; the other enters it and presses **Join**. Both start in the cell and see each other move live. You share one ship: when one player steals the key or opens the cell, it happens for both, and the same goes for items, coins, chests, the crew, alarms and the ending. If a guard catches one of you, that player is taken back to the cell, the door is locked (you keep the key) and the crew search the ship for the other player for 30 seconds, starting where they were last seen. Reading a letter does not pause the game in multiplayer, and Restart restarts the ship for both. Setup of the Ably key is described in [CONTRIBUTING.md](CONTRIBUTING.md#multiplayer-setup-ably).
 
 ## Six escape routes
 
