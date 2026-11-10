@@ -186,7 +186,7 @@ def voyage_action(s,kind,point,wall,elapsed=0):
   if not boat_ready(s):return no('Find a sail and rope, or bring a sail and bribe the boatswain.')
   if kind=='finish':
    if s.reading!='confirm_dinghy':return no('Inspect the boat first.')
-   return ActionResult(replace(s,ending='dinghy',reading='',paused_at_ms=0,paused_total_ms=s.paused_total_ms+max(0,wall-s.paused_at_ms)),True,'You sail for shore.')
+   return ActionResult(replace(s,ending='dinghy',reading='',paused_at_ms=0,paused_total_ms=s.paused_total_ms+(max(0,wall-s.paused_at_ms) if s.paused_at_ms else 0)),True,'You sail for shore.')
   return ActionResult(replace(s,reading='confirm_dinghy',paused_at_ms=max(1,wall)),True,'Ready to lower the dinghy?')
  return no('Unknown action.')
 

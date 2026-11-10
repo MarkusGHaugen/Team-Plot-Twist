@@ -32,6 +32,9 @@ CRATE_RANGE = 45.0
 VISION_RANGE = 180.0
 VISION_HEIGHT = 28.0
 ALERT_DURATION_MS = 20_000
+# After a capture in multiplayer the crew search 30 s for the other player.
+SEARCH_ALERT_MS = 30_000
+ALERT_DURATIONS = (ALERT_DURATION_MS, SEARCH_ALERT_MS)
 ALERT_SPEED = 2.4
 WARDROBE_SIGHT = 125.0
 INSPECTION_RANGE = 95.0
@@ -109,7 +112,7 @@ MAP_CONFIG = {
     'barrel_range': BARREL_RANGE, 'crate_range': CRATE_RANGE,
     'barrels': BARRELS, 'crates': CRATES,
     'vision_range': VISION_RANGE, 'vision_height': VISION_HEIGHT,
-    'alert_duration_ms': ALERT_DURATION_MS, 'alert_speed': ALERT_SPEED,
+    'alert_duration_ms': ALERT_DURATION_MS, 'search_alert_ms': SEARCH_ALERT_MS, 'alert_speed': ALERT_SPEED,
     'key_reach': KEY_REACH, 'key_height': KEY_HEIGHT,
     'mast_x': MAST_X, 'mast_top_y': MAST_TOP_Y, 'mast_speed': MAST_SPEED,
     'lamp_vision_multiplier': LAMP_VISION_MULTIPLIER,
@@ -351,10 +354,16 @@ def alert_waypoints(kind: str) -> tuple[Position,...]:
     return tuple(Position(zone,float(x)) for zone,x in locations[kind])
 
 
-def search_path_pose(path,kind,elapsed_ms):
-    """Traverse the entire search route in 20s; reverse without stopping in combat."""
+def alert_duration(state) -> int:
+    """How long this alarm's search walk takes: 20 s, or 30 s after a multiplayer capture."""
+    span=state.alert_until_ms-state.alert_started_ms
+    return span if span in ALERT_DURATIONS else ALERT_DURATION_MS
+
+
+def search_path_pose(path,kind,elapsed_ms,duration_ms=ALERT_DURATION_MS):
+    """Traverse the entire search route once per alarm; reverse without stopping in combat."""
     length=sum(hypot(b[0]-a[0],b[1]-a[1]) for a,b in zip(path,path[1:]))
-    phase=max(0,elapsed_ms)/ALERT_DURATION_MS % 2
+    phase=max(0,elapsed_ms)/duration_ms % 2
     reverse=phase>1
     points=list(reversed(path)) if reverse else path
     return _path_pose(points,length*(phase-1 if reverse else phase),kind)
@@ -364,10 +373,10 @@ def search_pose_at(state,kind,now_ms):
     armed=story_progress(state).get('voyage',{}).get('armed',False)
     if not (state.alert_started_ms<=now_ms<state.alert_until_ms or armed):return None
     path=json.loads(state.alert_paths).get(kind)
-    if path:return search_path_pose(path,kind,now_ms-state.alert_started_ms)
+    if path:return search_path_pose(path,kind,now_ms-state.alert_started_ms,alert_duration(state))
     # Earlier saves have no search route for the original sleeping guard.
     if armed and kind=='sleeper':
-        return search_path_pose([list(p) for p in route_points(Position('cabin',300),Position('chest_room',1320))],kind,now_ms-state.alert_started_ms)
+        return search_path_pose([list(p) for p in route_points(Position('cabin',300),Position('chest_room',1320))],kind,now_ms-state.alert_started_ms,alert_duration(state))
     return None
 
 
@@ -436,7 +445,7 @@ def guard_pose_at(state: GameState, kind: str, guard_elapsed: float, now_ms: int
 
 
 def _start_alert(state: GameState, guard_elapsed: float, now_ms: int, cell_first: bool=False,
-                 first_goal: Position | None=None) -> GameState:
+                 first_goal: Position | None=None, duration_ms: int=ALERT_DURATION_MS) -> GameState:
     paths={};resume={}
     for kind in (*GUARD_ROUTES,'sleeper'):
         if not getattr(state,f'{kind}_alive'): continue
@@ -458,7 +467,7 @@ def _start_alert(state: GameState, guard_elapsed: float, now_ms: int, cell_first
             if now_ms<back(meal,kind):home=_position_at_xy(*meal['returns'][kind][-1])
         if kind in ('cargo','sleeper'):
             from voyage import normal_watch_pose
-            future,_=normal_watch_pose(state,kind,now_ms+ALERT_DURATION_MS)
+            future,_=normal_watch_pose(state,kind,now_ms+duration_ms)
             if future is not None:home=_position_at_xy(future.x,future.y)
         points.extend([list(p) for p in route_points(current,home)[1:]])
         points=[p for i,p in enumerate(points) if i==0 or p!=points[i-1]]
@@ -469,7 +478,7 @@ def _start_alert(state: GameState, guard_elapsed: float, now_ms: int, cell_first
     if 'feast' in v:
         from feast import interrupt
         state=voyage_save(state,interrupt(state,v,now_ms))
-    return replace(state,alert_started_ms=now_ms,alert_until_ms=now_ms+ALERT_DURATION_MS,
+    return replace(state,alert_started_ms=now_ms,alert_until_ms=now_ms+duration_ms,
                    suspect_started_ms=0,suspect_guard_zone='',suspect_guard_value=0.,
                    alert_paths=json.dumps(paths,separators=(',',':')),
                    alert_resume=json.dumps(resume,separators=(',',':')))
@@ -687,7 +696,7 @@ def state_from_backup(payload: object) -> GameState | None:
     if state.capture_phase == 'active':
         if not valid_position(Position(state.capture_guard_zone,state.capture_guard_value),True): return None
     elif state.capture_guard_zone: return None
-    if state.alert_until_ms and state.alert_until_ms-state.alert_started_ms != ALERT_DURATION_MS: return None
+    if state.alert_until_ms and state.alert_until_ms-state.alert_started_ms not in ALERT_DURATIONS: return None
     from voyage import progress as voyage_progress,captain_ready
     v=voyage_progress(state)
     for kind,barrel_id in v.get('concealed',{}).items():
@@ -1081,6 +1090,12 @@ def story_progress(state: GameState) -> dict:
             'whistle_used': False, **json.loads(state.story_state)}
 
 
+def reading_time(state: GameState, wall_now: int) -> int:
+    """Time spent with a document open. Zero when nothing paused the game
+    (multiplayer never pauses the shared ship), so closing adds nothing."""
+    return max(0,wall_now-state.paused_at_ms) if state.paused_at_ms else 0
+
+
 def game_now_ms(state: GameState, wall_now: int) -> int:
     """Alarm and patrol time excludes reading time, including across reloads."""
     return (state.paused_at_ms or wall_now) - state.paused_total_ms
@@ -1114,7 +1129,7 @@ def story_action(state: GameState, kind: str, point_id: str, wall_now: int) -> A
         if not state.reading:
             return ActionResult(state,False,'No document is open.')
         return ActionResult(replace(state,reading='',paused_at_ms=0,
-            paused_total_ms=state.paused_total_ms + max(0,wall_now-state.paused_at_ms)),True,'Back to the ship.')
+            paused_total_ms=state.paused_total_ms + reading_time(state,wall_now)),True,'Back to the ship.')
     if state.reading and kind != 'finish':
         return ActionResult(state,False,'Close the document first.')
     if state.capture_phase != 'none':
@@ -1142,7 +1157,7 @@ def story_action(state: GameState, kind: str, point_id: str, wall_now: int) -> A
         if 'sleeping_pills' not in progress['items'] or not opponents_remaining(state):
             return ActionResult(state,False,'The requirements for this escape are not met.')
         return ActionResult(replace(state,ending='castaway',reading='',paused_at_ms=0,
-            paused_total_ms=state.paused_total_ms + max(0,wall_now-state.paused_at_ms),
+            paused_total_ms=state.paused_total_ms + reading_time(state,wall_now),
             alert_started_ms=0,alert_until_ms=0,suspect_started_ms=0),True,ENDINGS['castaway']['title'])
     if kind == 'finish':
         required = 'confirm_takeover' if point_id == 'helm' else 'confirm_crate' if point_id == 'return_crate' else None
@@ -1152,7 +1167,7 @@ def story_action(state: GameState, kind: str, point_id: str, wall_now: int) -> A
         if (ending == 'takeover' and opponents_remaining(state)) or (ending == 'crate' and not crate_ready(state)):
             return ActionResult(state,False,'The requirements for this escape are not met.')
         return ActionResult(replace(state,ending=ending,reading='',paused_at_ms=0,
-            paused_total_ms=state.paused_total_ms + max(0,wall_now-state.paused_at_ms),
+            paused_total_ms=state.paused_total_ms + reading_time(state,wall_now),
             alert_started_ms=0,alert_until_ms=0,suspect_started_ms=0),True,ENDINGS[ending]['title'])
     if state.reading:
         return ActionResult(state,False,'Close the document first.')

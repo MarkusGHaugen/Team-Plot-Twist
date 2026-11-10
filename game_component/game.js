@@ -224,7 +224,8 @@ function searchPose(data,kind) {
   let path=(data.parsedAlertPaths||JSON.parse(data.alert_paths||'{}'))[kind];
   if(!path&&armed&&kind==='sleeper')path=data.rules.watch_path||[[300,365],[540,365],[440,500],[1320,500]];
   if(!path)return null;
-  let phase=Math.max(0,now-data.alert_started_ms)/data.rules.alert_duration_ms%2;
+  const span=data.alert_until_ms-data.alert_started_ms,duration=span===data.rules.search_alert_ms?span:data.rules.alert_duration_ms;
+  let phase=Math.max(0,now-data.alert_started_ms)/duration%2;
   if(phase>1){path=[...path].reverse();phase-=1;}
   const length=pathLength(path),distance=length*phase,p=pointOnPath(path,distance);
   let left=distance;
@@ -1068,11 +1069,12 @@ function syncMultiplayer(client,data,key,setTriggerValue) {
   let mp=rooms.get(key);
   if(mp&&mp.room!==m.room){closeMultiplayer(key);mp=null;}
   if(mp){
-    mp.client=client;mp.token={request:m.token_request,at:performance.now()};
+    mp.client=client;mp.setTrigger=setTriggerValue;mp.token={request:m.token_request,at:performance.now()};
     if(mp.pendingAuth){const done=mp.pendingAuth;mp.pendingAuth=null;done(m.token_request);}
+    noteShipVersion(mp,Number(m.world_version)||0);
     return;
   }
-  mp={key,room:m.room,clientId:m.client_id,client,status:'connecting',partner:null,partnerName:null,
+  mp={key,room:m.room,clientId:m.client_id,client,setTrigger:setTriggerValue,shipVersion:Number(m.world_version)||0,syncWanted:0,status:'connecting',partner:null,partnerName:null,
       token:{request:m.token_request,at:performance.now()},pendingAuth:null,lastSent:'',lastSentAt:0,forceSend:true};
   rooms.set(key,mp);
   loadAbly(m.sdk_url).then(AblyPubSub=>{
@@ -1087,6 +1089,12 @@ function syncMultiplayer(client,data,key,setTriggerValue) {
     }});
     mp.realtime.connection.on(change=>{mp.status=change.current;if(change.current==='connected'){mp.forceSend=true;publishPosition(mp.client,mp.key,performance.now());}});
     mp.channel=mp.realtime.channels.get(m.channel);
+    // The partner changed the shared ship: fetch it with one Streamlit run.
+    mp.channel.subscribe('ship',message=>{
+      const v=Number(message.data?.v)||0;
+      if(mp.closed||message.clientId===mp.clientId||v<=mp.shipVersion||v<=mp.syncWanted)return;
+      mp.syncWanted=v;mp.setTrigger('sync',{v,at:Date.now()});
+    });
     mp.channel.subscribe('pos',message=>{
       if(mp.closed||message.clientId===mp.clientId)return;
       const p=message.data||{};
@@ -1103,6 +1111,14 @@ function syncMultiplayer(client,data,key,setTriggerValue) {
     });
     mp.channel.presence.enter({}).then(()=>refreshPartners(mp)).catch(()=>{mp.status='failed';});
   }).catch(error=>{mp.status='failed';console.error('Team Plot Twist multiplayer could not start',error);});
+}
+// A newer ship version in our own data means our action changed the shared
+// ship: tell the partner. Versions only grow, so the partner never echoes back.
+function noteShipVersion(mp,version) {
+  if(version>=mp.syncWanted)mp.syncWanted=0;
+  if(version<=mp.shipVersion)return;
+  mp.shipVersion=version;
+  if(mp.channel&&mp.status==='connected')mp.channel.publish('ship',{v:version}).catch(()=>{});
 }
 function partnerSnapshot(client) {
   const d=client.data,xy=positionXY(client.position,d.rules),vv=d.story?.voyage||{};
