@@ -59,7 +59,7 @@ def crate_path():
     state=accepted(toggle_wardrobe(state))
     for point in ('tools_chest','manifest_desk','seal_chest'):
         state=take_story(state,point)
-    state=walk(state,Position('kitchen',1260))
+    state=walk(state,Position('mid',735))
     for _ in range(2):
         state=accepted(story_action(state,'inspect','return_crate',5000))
         if state.reading: state=accepted(story_action(state,'close_reading','',6000))

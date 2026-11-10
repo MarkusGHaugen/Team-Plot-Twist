@@ -23,7 +23,7 @@ def test_watch_alternates_and_key_does_not_transfer():
  assert watch_pose(s,'sleeper',104_000)[1]
 
 def test_crate_needs_no_manifest_or_seal():
- s=free('kitchen',1260);s=replace(s,reached_kitchen=True)
+ s=free('mid',735)
  import json
  s=replace(s,story_state=json.dumps({'items':['crowbar']}))
  opened=story_action(s,'inspect','return_crate',1000);assert opened.accepted and not opened.state.reading
@@ -55,7 +55,7 @@ def test_cook_payment_escort_and_restore():
  assert story_progress(paid.state)['voyage']['coins']==0
  assert not voyage_action(paid.state,'bribe','cook',2100).accepted
  arrived=finish_guide(paid.state)
- assert arrived.position==Position('kitchen',1260)
+ assert arrived.position==Position('mid',735)
  assert story_progress(arrived)['crate_open']
  assert state_from_backup(asdict(arrived))==arrived
 

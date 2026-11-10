@@ -6,6 +6,8 @@
 - Deck cannon: light it with a lamp; the blast draws every pirate to the cannon and wakes a sleeping crew.
 - Telescope in the crow's nest with a panning view of the horizon.
 - Rats in the hold that flee from people.
+- Return crate 07 now waits on the middle deck between the two barrels; the cook's escort leads there.
+- A real galley: planked deckhouse, iron range with a live fire, a big stew pot with bubbles and steam (crushed pills show as pale specks), hanging pans, a shelf and a prep table.
 - Faster online play: key presses no longer wait behind a once-a-second crew check, each action runs the page once instead of twice, and the game script is downloaded once instead of with every action.
 - Validation: 149+ tests, including server/Canvas parity for every crew pose during the meal; scenes checked in a rendered preview.
 

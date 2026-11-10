@@ -38,7 +38,7 @@ def crate_ready():
     state = collect(free(), 'tools_chest', 'hold', 510)
     state = collect(state, 'manifest_desk', 'officers', 2380)
     state = collect(state, 'seal_chest', 'captain', 2460)
-    state = replace(state, position=Position('kitchen', 1260), reached_kitchen=True)
+    state = replace(state, position=Position('mid', 735))
     state = close(act(state, 'return_crate').state)
     assert story_progress(state)['crate_open']
     state = close(act(state, 'return_crate').state)
@@ -71,7 +71,7 @@ def test_documents_pause_and_resume_a_server_tracked_game_clock():
 
 
 def test_crate_needs_open_lid_and_living_cook():
-    state = free(position=Position('kitchen',1260))
+    state = free(position=Position('mid',735))
     result = act(state, 'return_crate')
     assert not result.accepted and not story_progress(result.state).get('crate_open')
     assert not act(close(result.state), 'return_crate', 'finish').accepted
