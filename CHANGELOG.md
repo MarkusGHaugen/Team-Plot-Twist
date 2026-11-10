@@ -6,6 +6,7 @@
 - Deck cannon: light it with a lamp; the blast draws every pirate to the cannon and wakes a sleeping crew.
 - Telescope in the crow's nest with a panning view of the horizon.
 - Rats in the hold that flee from people.
+- Faster online play: key presses no longer wait behind a once-a-second crew check, each action runs the page once instead of twice, and the game script is downloaded once instead of with every action.
 - Validation: 149+ tests, including server/Canvas parity for every crew pose during the meal; scenes checked in a rendered preview.
 
 ## 1.0.0 — 2026-11-04
