@@ -255,6 +255,20 @@ function watchCrew(d,kind) {
   for(let i=1;i<path.length;i++) {const a=path[i-1],b=path[i],len=Math.hypot(b[0]-a[0],b[1]-a[1]);if(left<=len){const q=left/(len||1);return {x:a[0]+(b[0]-a[0])*q,y:a[1]+(b[1]-a[1])*q,name:'watch',facing:kind==='sleeper'?1:-1};}left-=len;}
   return {x:1320,y:500,name:'watch',facing:1};
 }
+// Online, every crew tick is a full server round trip, and a key press waits
+// behind it. The server only needs one while something can happen between key
+// presses: a fight, an escort, the first tick that starts the watch rota, or
+// the sleeper close enough to spot the player. The reach is wider than the
+// sleeper's 160px sight so network delay cannot hide a sighting.
+const TICK_REACH_X=360,TICK_REACH_Y=60;
+function crewTickNeeded(d,position) {
+  const v=d.story?.voyage||{};
+  if(v.armed||v.escort||v.watch_start===undefined)return true;
+  if(!d.sleeper_alive||d.disguised||d.hidden_barrel||d.in_hammock)return false;
+  const p=watchCrew(d,'sleeper');if(!p)return false;
+  const xy=positionXY(position,d.rules);
+  return Math.abs(xy.x-p.x)<=TICK_REACH_X&&Math.abs(xy.y-p.y)<=TICK_REACH_Y;
+}
 
 function gameNow(data) { return Number(data.paused_at_ms || data.uiPauseAt || Date.now()) - Number(data.paused_total_ms || 0); }
 function guardElapsed(data,kind="patrol") {
@@ -1326,7 +1340,7 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
     const e=client.data.story?.voyage?.escort;
     if(e&&!client.data.reading){const p=guidePosition(e,gameNow(client.data)),before=positionXY(client.position,client.data.rules);client.position=positionAtXY(p,client.data.rules);if(Math.abs(p.x-before.x)>.01)client.facing=p.x>before.x?'right':'left';}
     const frozen=Boolean(client.data.ending || client.data.reading || client.readingPending);
-    if(!frozen && !client.actionInFlight && now>=(client.nextVoyageTick||0) && client.data.capture_phase==='none') {
+    if(!frozen && !client.actionInFlight && now>=(client.nextVoyageTick||0) && client.data.capture_phase==='none' && crewTickNeeded(client.data,client.position)) {
       client.nextVoyageTick=now+(client.data.story?.voyage?.armed||client.data.story?.voyage?.escort?250:1000);action('voyage_tick');
     }
     if(!frozen && client.data.capture_phase==='active' && !client.actionInFlight && now>=(client.nextCaptureTick||0)) {

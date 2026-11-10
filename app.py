@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import re
 import time
 import uuid
 from contextlib import closing
 from dataclasses import asdict
+from functools import partial
 from pathlib import Path
 
 import streamlit as st
@@ -25,6 +28,7 @@ from content import DOCUMENTS, ENDINGS, ITEMS, ROLES, STORY_POINTS
 ROOT = Path(__file__).resolve().parent
 DB_PATH = Path(os.environ.get("TEAM_PLOT_TWIST_DB", ROOT / "data" / "team-progress.sqlite3"))
 COMPONENT_DIR = ROOT / "game_component"
+STATIC_BUILD_DIR = ROOT / "static" / "build"
 
 st.set_page_config(
     page_title="Team Plot Twist · Escape from the pirate ship",
@@ -60,6 +64,35 @@ def begin_play(state=None):
     st.session_state.feedback_accepted = False
 
 
+def apply_game_action(player_id):
+    """Apply a canvas action in the widget callback, before the script runs.
+
+    The page then draws the result in the same run. Applying it after the
+    canvas was drawn needed a second full run (st.rerun), which online costs
+    another server round trip for every key press.
+    """
+    action = (st.session_state.get(f"game_canvas_{player_id}") or {}).get("action")
+    if not isinstance(action, dict) or "run_id" not in st.session_state:
+        return
+    cache = st.session_state.setdefault("action_acknowledgements", {})
+    with closing(connect_db(DB_PATH)) as conn:
+        outcome, request_id, duplicate = handle_action(conn, action, player_id,
+            st.session_state.run_id, cache, int(time.time() * 1000))
+    # A position snapshot that arrives together with an action is dropped:
+    # a rejected action must never cause a database write.
+    st.session_state.action_applied = True
+    if not duplicate and outcome.accepted and action.get("kind") in ("capture_complete", "capture_tick", "restart_game") and outcome.state.capture_phase == "none":
+        begin_play()
+        st.session_state.feedback_text = outcome.message
+        st.session_state.feedback_seq = 1
+        st.session_state.feedback_accepted = True
+        return
+    st.session_state.feedback_seq += 1
+    st.session_state.feedback_request_id = request_id
+    st.session_state.feedback_text = outcome.message
+    st.session_state.feedback_accepted = outcome.accepted
+
+
 def position_from_payload(payload):
     if not isinstance(payload, dict):
         return None
@@ -76,12 +109,50 @@ def cached_component(name, html, css, js):
     return st.components.v2.component(name=name, html=html, css=css, js=js)
 
 
+def publish_script(name, source):
+    """Serve source as a static file named by its content hash; return its URL.
+
+    A new name for every change means browsers can cache the file and still
+    never run an outdated version after a deployment.
+    """
+    digest = hashlib.sha256(source.encode("utf-8")).hexdigest()[:16]
+    target = STATIC_BUILD_DIR / f"{name}-{digest}.js"
+    if not target.exists():
+        STATIC_BUILD_DIR.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_name(f"{target.name}.{uuid.uuid4().hex}.tmp")
+        temporary.write_text(source, encoding="utf-8")
+        os.replace(temporary, target)
+        for old in STATIC_BUILD_DIR.glob(f"{name}-*.js"):
+            if old != target:
+                old.unlink(missing_ok=True)
+    return f"app/static/build/{target.name}"
+
+
+# Streamlit sends a component's inline code with every run. Inlining the game
+# (over 120 KB) made every key press download it again, so the inline part is
+# only this loader and the browser fetches the game file once.
+GAME_LOADER = """
+const source = new URL(%s, document.baseURI).href;
+export default function (args) {
+  let cleanup = null, gone = false;
+  import(source).then(game => { if (!gone) cleanup = game.default(args); }).catch(error => {
+    console.error("Team Plot Twist could not load the game", error);
+    const note = document.createElement("p");
+    note.textContent = "The game could not load. Reload the page to try again.";
+    args.parentElement.prepend(note);
+  });
+  return () => { gone = true; if (typeof cleanup === "function") cleanup(); };
+}
+"""
+
+
 def game_component():
+    script = publish_script("game", (COMPONENT_DIR / "game.js").read_text(encoding="utf-8"))
     return cached_component(
         "team_plot_twist_canvas_game",
         (COMPONENT_DIR / "game.html").read_text(encoding="utf-8"),
         (COMPONENT_DIR / "game.css").read_text(encoding="utf-8"),
-        (COMPONENT_DIR / "game.js").read_text(encoding="utf-8"),
+        GAME_LOADER % json.dumps(script),
     )
 
 
@@ -145,6 +216,8 @@ def main():
         st.session_state.browser_storage_available = bool(identity.get("storage_available"))
 
     player_id = st.session_state.player_id
+    # Read the flag at once, so an early return below cannot leave it set.
+    action_applied = st.session_state.pop("action_applied", False)
     if not st.session_state.browser_storage_available:
         st.warning("Your browser blocks local storage. Progress may be lost after a server restart.")
 
@@ -245,33 +318,16 @@ def main():
     result = game_component()(
         data=data,
         default={"position": {**asdict(saved.position),"run_id":st.session_state.run_id}},
-        on_action_change=lambda: None,
+        on_action_change=partial(apply_game_action, player_id),
         on_position_change=lambda: None,
         key=f"game_canvas_{player_id}",
         width="stretch",
         height=660,
     )
 
-    # Process a discrete action before any location snapshot. A rejected action
-    # must never cause a database write, even if both messages arrive together.
-    action = result.action
-    if isinstance(action, dict):
-        cache=st.session_state.setdefault('action_acknowledgements',{})
-        with closing(connect_db(DB_PATH)) as conn:
-            outcome,request_id,duplicate=handle_action(conn,action,player_id,
-                st.session_state.run_id,cache,int(time.time()*1000))
-        if not duplicate and outcome.accepted and action.get("kind") in ("capture_complete","capture_tick","restart_game") and outcome.state.capture_phase=="none":
-            begin_play()
-            st.session_state.feedback_text=outcome.message
-            st.session_state.feedback_seq=1
-            st.session_state.feedback_accepted=True
-            st.rerun()
-        st.session_state.feedback_seq+=1
-        st.session_state.feedback_request_id=request_id
-        st.session_state.feedback_text=outcome.message
-        st.session_state.feedback_accepted=outcome.accepted
-        st.rerun()
-    else:
+    # Any action was already applied by apply_game_action before this run, so
+    # the canvas above shows its result.
+    if not action_applied:
         position = position_from_payload(result.position)
         if position is not None and result.position.get("run_id")==st.session_state.run_id:
             with closing(connect_db(DB_PATH)) as conn:

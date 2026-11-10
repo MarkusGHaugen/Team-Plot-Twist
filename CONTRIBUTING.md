@@ -35,3 +35,15 @@ The file appears in `dist/`. For an extracted ZIP without Git metadata, the scri
 ## Deployment
 
 Use this repository for a separate Streamlit app if the group wants an online version. Keep `app.py` as the entry point, Python 3.12, `uv.lock`, and static serving enabled. Do not reuse another project's database path, deployment settings or secrets. A deployment is a separate step from merging and requires the owner's coordination.
+
+The online game is at https://team-plot-twist.streamlit.app and updates itself from `main`.
+
+## Keeping online play fast
+
+Online, every request to the server is a round trip of roughly half a second, while on your own machine it is almost instant. Keep this in mind:
+
+- Each `setTriggerValue`/`setStateValue` in `game.js` runs `app.py` on the server. Do not add timers that call the server regularly; compute what you can in the Canvas and only ask the server when a rule must decide. `crewTickNeeded` shows the pattern.
+- Avoid `st.rerun()` in the play loop. Apply actions in a widget callback, as `apply_game_action` does, so one run is enough.
+- Everything passed to the component's `data` is sent on every run. Keep it small, and keep large fixed code or text out of it. `game.js` is served from `static/build/` for that reason.
+- Start animations in the Canvas at once, then let the server confirm.
+- Test new interactions in the online version as well, not only locally.
