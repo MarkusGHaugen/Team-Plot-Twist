@@ -8,6 +8,7 @@ import time
 import uuid
 from contextlib import closing
 from dataclasses import asdict
+from functools import partial
 from pathlib import Path
 
 import streamlit as st
@@ -58,6 +59,35 @@ def begin_play(state=None):
     st.session_state.feedback_seq = 0
     st.session_state.feedback_text = ""
     st.session_state.feedback_accepted = False
+
+
+def apply_game_action(player_id):
+    """Apply a canvas action in the widget callback, before the script runs.
+
+    The page then draws the result in the same run. Applying it after the
+    canvas was drawn needed a second full run (st.rerun), which online costs
+    another server round trip for every key press.
+    """
+    action = (st.session_state.get(f"game_canvas_{player_id}") or {}).get("action")
+    if not isinstance(action, dict) or "run_id" not in st.session_state:
+        return
+    cache = st.session_state.setdefault("action_acknowledgements", {})
+    with closing(connect_db(DB_PATH)) as conn:
+        outcome, request_id, duplicate = handle_action(conn, action, player_id,
+            st.session_state.run_id, cache, int(time.time() * 1000))
+    # A position snapshot that arrives together with an action is dropped:
+    # a rejected action must never cause a database write.
+    st.session_state.action_applied = True
+    if not duplicate and outcome.accepted and action.get("kind") in ("capture_complete", "capture_tick", "restart_game") and outcome.state.capture_phase == "none":
+        begin_play()
+        st.session_state.feedback_text = outcome.message
+        st.session_state.feedback_seq = 1
+        st.session_state.feedback_accepted = True
+        return
+    st.session_state.feedback_seq += 1
+    st.session_state.feedback_request_id = request_id
+    st.session_state.feedback_text = outcome.message
+    st.session_state.feedback_accepted = outcome.accepted
 
 
 def position_from_payload(payload):
@@ -145,6 +175,8 @@ def main():
         st.session_state.browser_storage_available = bool(identity.get("storage_available"))
 
     player_id = st.session_state.player_id
+    # Read the flag at once, so an early return below cannot leave it set.
+    action_applied = st.session_state.pop("action_applied", False)
     if not st.session_state.browser_storage_available:
         st.warning("Your browser blocks local storage. Progress may be lost after a server restart.")
 
@@ -245,33 +277,16 @@ def main():
     result = game_component()(
         data=data,
         default={"position": {**asdict(saved.position),"run_id":st.session_state.run_id}},
-        on_action_change=lambda: None,
+        on_action_change=partial(apply_game_action, player_id),
         on_position_change=lambda: None,
         key=f"game_canvas_{player_id}",
         width="stretch",
         height=660,
     )
 
-    # Process a discrete action before any location snapshot. A rejected action
-    # must never cause a database write, even if both messages arrive together.
-    action = result.action
-    if isinstance(action, dict):
-        cache=st.session_state.setdefault('action_acknowledgements',{})
-        with closing(connect_db(DB_PATH)) as conn:
-            outcome,request_id,duplicate=handle_action(conn,action,player_id,
-                st.session_state.run_id,cache,int(time.time()*1000))
-        if not duplicate and outcome.accepted and action.get("kind") in ("capture_complete","capture_tick","restart_game") and outcome.state.capture_phase=="none":
-            begin_play()
-            st.session_state.feedback_text=outcome.message
-            st.session_state.feedback_seq=1
-            st.session_state.feedback_accepted=True
-            st.rerun()
-        st.session_state.feedback_seq+=1
-        st.session_state.feedback_request_id=request_id
-        st.session_state.feedback_text=outcome.message
-        st.session_state.feedback_accepted=outcome.accepted
-        st.rerun()
-    else:
+    # Any action was already applied by apply_game_action before this run, so
+    # the canvas above shows its result.
+    if not action_applied:
         position = position_from_payload(result.position)
         if position is not None and result.position.get("run_id")==st.session_state.run_id:
             with closing(connect_db(DB_PATH)) as conn:

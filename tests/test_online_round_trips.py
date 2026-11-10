@@ -61,3 +61,42 @@ def test_fights_escorts_and_the_first_tick_always_reach_the_server():
     near_sleeper = asdict(Position('cabin', 330))
     t = NOW0 + 60_000
     assert tick_needed([[fresh, far, t], [armed, far, t], [escort, far, t], [hidden, near_sleeper, t]]) == [True, True, True, False]
+
+
+class FakeSessionState(dict):
+    __getattr__ = dict.__getitem__
+    __setattr__ = dict.__setitem__
+
+
+def test_actions_are_applied_before_the_page_runs(tmp_path, monkeypatch):
+    """One script run per key press: the callback saves the action first."""
+    import app
+    from db import connect_db, load_game, restore_game
+    path = tmp_path / 'callback.sqlite3'
+    monkeypatch.setattr(app, 'DB_PATH', path)
+    s = replace(initial_state(), has_key=True, door_open=True, position=Position('mid', 540))
+    with connect_db(path) as c:
+        assert restore_game(c, s, 'one')
+    action = {'request_id': 'r1', 'run_id': 'run', 'kind': 'wardrobe', 'position': {'zone': 'mid', 'value': 540},
+              'guard_elapsed': 0, 'facing': 'right', 'item': None}
+    session = FakeSessionState(run_id='run', feedback_seq=3, feedback_request_id='', feedback_text='',
+                               feedback_accepted=False, game_canvas_one={'action': action})
+    monkeypatch.setattr(app.st, 'session_state', session)
+    app.apply_game_action('one')
+    with connect_db(path) as c:
+        assert load_game(c, 'one').wardrobe_open
+    assert session.feedback_seq == 4 and session.feedback_request_id == 'r1' and session.feedback_accepted
+    assert session.action_applied
+    # The page's position snapshot is skipped in that run; nothing else changes.
+    session.game_canvas_one = {'position': {'zone': 'mid', 'value': 540}}
+    session.feedback_seq = 9
+    app.apply_game_action('one')
+    assert session.feedback_seq == 9
+
+
+def test_the_page_no_longer_reruns_after_every_action():
+    from pathlib import Path
+    source = Path('app.py').read_text()
+    body = source[source.index('on_action_change='):]
+    assert 'on_action_change=partial(apply_game_action' in source
+    assert 'handle_action(' not in body and 'st.rerun()' not in body
