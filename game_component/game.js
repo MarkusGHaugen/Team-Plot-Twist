@@ -1034,17 +1034,17 @@ function cameraFor(player,w,h,zone) {
 const rooms = globalThis.__teamPlotTwistRooms ??= new Map();
 const PARTNER_SEND_MS=125,PARTNER_HEARTBEAT_MS=5000,PARTNER_TOKEN_FRESH_MS=30000;
 function loadAbly(url) {
-  if(globalThis.Ably) return Promise.resolve(globalThis.Ably);
+  if(globalThis.AblyPubSub) return Promise.resolve(globalThis.AblyPubSub);
   return globalThis.__teamPlotTwistAbly ??= new Promise((resolve,reject)=>{
     const script=document.createElement('script');script.src=url;script.async=true;
-    script.onload=()=>resolve(globalThis.Ably);script.onerror=()=>{globalThis.__teamPlotTwistAbly=null;reject(new Error('Ably SDK did not load'));};
+    script.onload=()=>resolve(globalThis.AblyPubSub);script.onerror=()=>{globalThis.__teamPlotTwistAbly=null;reject(new Error('Ably SDK did not load'));};
     document.head.appendChild(script);
   });
 }
 function closeMultiplayer(key) {
   const mp=rooms.get(key);if(!mp)return;
   rooms.delete(key);mp.closed=true;
-  try{mp.channel?.presence.leave();}catch(_){}
+  try{Promise.resolve(mp.channel?.presence.leave()).catch(()=>{});}catch(_){}
   try{mp.realtime?.close();}catch(_){}
 }
 function refreshPartners(mp) {
@@ -1054,8 +1054,10 @@ function refreshPartners(mp) {
     const ordered=[...members].sort((a,b)=>a.timestamp-b.timestamp);
     const mine=ordered.findIndex(m=>m.clientId===mp.clientId);
     mp.full=mine>=MAX_ROOM_PLAYERS;
-    const other=ordered.find(m=>m.clientId!==mp.clientId);
-    mp.partnerName=other?.data?.name||null;
+    // Names follow the order players entered the room, so a reload or a
+    // second Join never gives two players the same name.
+    const otherIndex=ordered.findIndex(m=>m.clientId!==mp.clientId);
+    mp.partnerName=otherIndex<0?null:`Player ${otherIndex+1}`;
     if(!other)mp.partner=null;
   }).catch(()=>{});
 }
@@ -1070,12 +1072,12 @@ function syncMultiplayer(client,data,key,setTriggerValue) {
     if(mp.pendingAuth){const done=mp.pendingAuth;mp.pendingAuth=null;done(m.token_request);}
     return;
   }
-  mp={room:m.room,name:m.name,clientId:m.client_id,client,status:'connecting',partner:null,partnerName:null,
+  mp={key,room:m.room,clientId:m.client_id,client,status:'connecting',partner:null,partnerName:null,
       token:{request:m.token_request,at:performance.now()},pendingAuth:null,lastSent:'',lastSentAt:0,forceSend:true};
   rooms.set(key,mp);
-  loadAbly(m.sdk_url).then(Ably=>{
+  loadAbly(m.sdk_url).then(AblyPubSub=>{
     if(mp.closed)return;
-    mp.realtime=new Ably.Realtime({clientId:m.client_id,echoMessages:false,authCallback:(params,callback)=>{
+    mp.realtime=AblyPubSub.createClient({clientId:m.client_id,echoMessages:false,authCallback:(params,callback)=>{
       // A token request is single-use and must be fresh; ask the server for a
       // new one (one Streamlit run) only when the last one is used or old.
       const t=mp.token;
@@ -1083,7 +1085,7 @@ function syncMultiplayer(client,data,key,setTriggerValue) {
       mp.pendingAuth=request=>{mp.usedRequest=request;callback(null,request);};
       setTriggerValue('ably',{room:m.room,at:Date.now()});
     }});
-    mp.realtime.connection.on(change=>{mp.status=change.current;if(change.current==='connected')mp.forceSend=true;});
+    mp.realtime.connection.on(change=>{mp.status=change.current;if(change.current==='connected'){mp.forceSend=true;publishPosition(mp.client,mp.key,performance.now());}});
     mp.channel=mp.realtime.channels.get(m.channel);
     mp.channel.subscribe('pos',message=>{
       if(mp.closed||message.clientId===mp.clientId)return;
@@ -1093,8 +1095,13 @@ function syncMultiplayer(client,data,key,setTriggerValue) {
       mp.partner={...p,receivedAt:performance.now(),shownX:before?.shownX??p.x,shownY:before?.shownY??p.y,
         movedAt:before&&(before.x!==p.x||before.y!==p.y)?performance.now():before?.movedAt??0};
     });
-    mp.channel.presence.subscribe(member=>{if(member.clientId!==mp.clientId)mp.forceSend=true;refreshPartners(mp);});
-    mp.channel.presence.enter({name:m.name}).then(()=>refreshPartners(mp)).catch(()=>{mp.status='failed';});
+    // A newcomer must see us at once, even if our tab is in the background
+    // and its animation frames (and so the regular sends) are paused.
+    mp.channel.presence.subscribe(member=>{
+      if(member.clientId!==mp.clientId){mp.forceSend=true;publishPosition(mp.client,mp.key,performance.now());}
+      refreshPartners(mp);
+    });
+    mp.channel.presence.enter({}).then(()=>refreshPartners(mp)).catch(()=>{mp.status='failed';});
   }).catch(error=>{mp.status='failed';console.error('Team Plot Twist multiplayer could not start',error);});
 }
 function partnerSnapshot(client) {
@@ -1124,7 +1131,16 @@ function drawPartner(ctx,client) {
   const moving=performance.now()-p.movedAt<300,style=p.cap?client.data.rules.guard_styles.officer:{color:p.g?'#9c3d33':'#7a4f9a'};
   const args=[ctx,p.shownX,p.shownY,false,performance.now()/1000,'none',p.f<0?'left':'right',moving,p.g,'patrol',style];
   if(p.c)crouchingPerson(...args);else person(...args);
-  label(ctx,mp.partnerName,p.shownX-String(mp.partnerName).length*3.4,p.shownY-(p.c?70:88),11);
+}
+// The name tag is drawn after the cell bars so it is never hidden behind them.
+function drawPartnerName(ctx,client) {
+  const mp=rooms.get(client.key),p=mp?.partner;
+  if(!p||!mp.partnerName||p.h||p.e||p.shownX===undefined)return;
+  const text=String(mp.partnerName),y=p.shownY-(p.c?72:90);
+  ctx.save();ctx.font='bold 11px Georgia, serif';
+  const width=ctx.measureText(text).width+12;
+  roundBox(ctx,p.shownX-width/2,y-12,width,16,6,'rgba(122,79,154,.85)','rgba(240,225,255,.7)');
+  ctx.fillStyle='#fbf3ff';ctx.fillText(text,p.shownX-width/2+6,y);ctx.restore();
 }
 function drawRoomBadge(ctx,w,client) {
   const mp=rooms.get(client.key);if(!mp)return;
@@ -1231,6 +1247,7 @@ function draw(client, canvas, stage, guards) {
     ctx.beginPath();ctx.arc(bullet.x,bullet.y,4,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
   }
   cellBars(ctx, Boolean(client.data.door_open || client.capture?.phase==="escort" || gameNow(client.data)>=client.data.alert_started_ms&&gameNow(client.data)<client.data.alert_until_ms&&guards.patrol.x<390&&guards.patrol.y===500));
+  drawPartnerName(ctx,client);
   ctx.restore();
   const dim=client.data.bright_view?.25:.61;
   const radius=(client.data.has_lamp&&client.data.lamp_lit&&client.data.held_item==="lamp"?295:205)*camera.zoom;

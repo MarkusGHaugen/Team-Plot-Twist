@@ -50,7 +50,7 @@ def test_api_keys_are_checked_before_use():
 
 
 def test_the_sdk_is_pinned_to_an_exact_version():
-    assert "@2.30.0/" in mp.ABLY_SDK_URL and mp.ABLY_SDK_URL.startswith("https://cdn.jsdelivr.net/npm/ably@")
+    assert mp.ABLY_SDK_URL.startswith("https://cdn.jsdelivr.net/npm/@ably/pubsub-device@3.0.0/")
 
 
 def _client_data(**changes):

@@ -18,7 +18,8 @@ ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O or 1/I to misread
 ROOM_LENGTH = 6
 MAX_PLAYERS = 2
 TOKEN_TTL_MS = 4 * 60 * 60 * 1000
-ABLY_SDK_URL = "https://cdn.jsdelivr.net/npm/ably@2.30.0/build/ably.min.js"
+# Accounts billed by monthly active users need the device SDK, not the older "ably" package.
+ABLY_SDK_URL = "https://cdn.jsdelivr.net/npm/@ably/pubsub-device@3.0.0/dist/cdn/ably.min.js"
 _KEY_PATTERN = re.compile(r"[\w-]+\.[\w-]+:[\w+/=-]+")
 
 

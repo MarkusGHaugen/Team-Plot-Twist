@@ -185,7 +185,7 @@ def ably_api_key():
     return key if mp.valid_api_key(key) else None
 
 
-def enter_room(player_id, room, name):
+def enter_room(player_id, room):
     """Join a room: continue its save, or start both players in the cell."""
     game_id = mp.save_id(player_id, room)
     with closing(connect_db(DB_PATH)) as conn:
@@ -193,14 +193,12 @@ def enter_room(player_id, room, name):
         if state is None:
             new_game(conn, game_id)
     st.session_state.room = room
-    st.session_state.room_name = name
     st.query_params["room"] = room
     begin_play(state)
 
 
 def leave_room():
     st.session_state.pop("room", None)
-    st.session_state.pop("room_name", None)
     if "room" in st.query_params:
         del st.query_params["room"]
     st.session_state.playing = False
@@ -211,8 +209,7 @@ def multiplayer_lobby(player_id, api_key):
     if "room" in st.session_state:
         room = st.session_state.room
         info, leave = st.columns([4, 1])
-        info.success(f"Room **{room}** · you are **{st.session_state.room_name}**. "
-                     f"Your friend chooses Multiplayer, enters `{room}` and presses Join.")
+        info.success(f"Room **{room}**. Your friend chooses Multiplayer, enters `{room}` and presses Join.")
         if leave.button("Leave room", use_container_width=True):
             leave_room()
             st.rerun()
@@ -224,7 +221,7 @@ def multiplayer_lobby(player_id, api_key):
     create_col, code_col, join_col = st.columns([1.2, 1.2, 1])
     with create_col:
         if st.button("Create room", use_container_width=True, type="primary"):
-            enter_room(player_id, mp.new_room_code(), "Player 1")
+            enter_room(player_id, mp.new_room_code())
             st.rerun()
     with code_col:
         code = st.text_input("Room code", value=st.query_params.get("room", ""), max_chars=mp.ROOM_LENGTH,
@@ -235,7 +232,7 @@ def multiplayer_lobby(player_id, api_key):
             if room is None:
                 st.error(f"A room code has {mp.ROOM_LENGTH} letters and digits.")
             else:
-                enter_room(player_id, room, "Player 2")
+                enter_room(player_id, room)
                 st.rerun()
     return True
 
@@ -305,7 +302,7 @@ def main():
     saved = read_progress(game_id, None if room else st.session_state.browser_backup)
     if room:
         if saved is None or not st.session_state.playing:
-            enter_room(player_id, room, st.session_state.room_name)
+            enter_room(player_id, room)
             st.rerun()
         new_clicked = continue_clicked = False
     else:
@@ -397,7 +394,6 @@ def main():
         "rules": {**MAP_CONFIG,"story_points":{**STORY_POINTS,"seal_chest":{**STORY_POINTS['seal_chest'],"item":'captain_uniform' if 'officer' in progress.get('voyage',{}).get('concealed',{}) else 'seal'}},"watch_path":route_points(Position("cabin",300),Position("chest_room",1320))},
         "multiplayer": {
             "room": room,
-            "name": st.session_state.room_name,
             "channel": mp.channel_name(room),
             "client_id": mp.save_id(player_id, "ably"),
             "sdk_url": mp.ABLY_SDK_URL,
