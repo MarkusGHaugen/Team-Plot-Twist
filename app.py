@@ -24,6 +24,7 @@ from logic import (GUARD_ROUTES, GUARD_SEGMENTS, MAP_CONFIG, Position, capture_p
 from action_transport import handle_action
 from content import DOCUMENTS, ENDINGS, ITEMS, ROLES, STORY_POINTS
 import multiplayer as mp
+import shared_ship
 
 
 ROOT = Path(__file__).resolve().parent
@@ -53,12 +54,15 @@ def read_progress(player_id: str, browser_backup=None):
         return state
 
 
-def begin_play(state=None):
+def begin_play(state=None, epoch_ms=None):
     st.session_state.playing = True
     st.session_state.confirm_new = False
     st.session_state.run_id = uuid.uuid4().hex
-    st.session_state.guard_started_ms = (game_now_ms(state, int(time.time() * 1000))
-                                       if state is not None else int(time.time() * 1000))
+    # In a room every player uses the room's clock, so the guards walk the
+    # same routes for both.
+    st.session_state.guard_started_ms = (epoch_ms if epoch_ms is not None else
+                                         game_now_ms(state, int(time.time() * 1000))
+                                         if state is not None else int(time.time() * 1000))
     st.session_state.feedback_request_id = ""
     st.session_state.feedback_seq = 0
     st.session_state.feedback_text = ""
@@ -76,14 +80,22 @@ def apply_game_action(player_id):
     if not isinstance(action, dict) or "run_id" not in st.session_state:
         return
     cache = st.session_state.setdefault("action_acknowledgements", {})
+    room = st.session_state.get("room")
+    wall_now = int(time.time() * 1000)
+    epoch = None
     with closing(connect_db(DB_PATH)) as conn:
+        before = load_game(conn, player_id) if room else None
         outcome, request_id, duplicate = handle_action(conn, action, player_id,
-            st.session_state.run_id, cache, int(time.time() * 1000))
+            st.session_state.run_id, cache, wall_now)
+        if room and before is not None and outcome.accepted and not duplicate:
+            outcome = share_room_action(conn, room, player_id, action, before, outcome, wall_now)
+            epoch = shared_ship.room_info(conn, room)["epoch_ms"]
+            st.session_state.room_generation = shared_ship.room_info(conn, room)["generation"]
     # A position snapshot that arrives together with an action is dropped:
     # a rejected action must never cause a database write.
     st.session_state.action_applied = True
     if not duplicate and outcome.accepted and action.get("kind") in ("capture_complete", "capture_tick", "restart_game") and outcome.state.capture_phase == "none":
-        begin_play()
+        begin_play(epoch_ms=epoch)
         st.session_state.feedback_text = outcome.message
         st.session_state.feedback_seq = 1
         st.session_state.feedback_accepted = True
@@ -92,6 +104,31 @@ def apply_game_action(player_id):
     st.session_state.feedback_request_id = request_id
     st.session_state.feedback_text = outcome.message
     st.session_state.feedback_accepted = outcome.accepted
+
+
+def share_room_action(conn, room, save_id, action, before, outcome, wall_now):
+    """Make an accepted action in a room happen on the shared ship."""
+    from dataclasses import replace as dc_replace
+    kind = action.get("kind")
+    if kind == "restart_game":
+        shared_ship.restart(conn, room, wall_now)
+        return dc_replace(outcome, state=load_game(conn, save_id))
+    after = load_game(conn, save_id)
+    if before.capture_phase == "active" and after.capture_phase == "none" and kind in ("capture_complete", "capture_tick"):
+        # Caught: back to the locked cell, while the crew search for the partner.
+        others = [load_game(conn, m) for m in shared_ship.members(conn, room) if m != save_id]
+        last_seen = next((s.position for s in others if s is not None), None)
+        try:
+            elapsed = float(action.get("guard_elapsed", 0))
+        except (TypeError, ValueError):
+            elapsed = 0.
+        after = shared_ship.jailed(before, elapsed, game_now_ms(before, wall_now), last_seen)
+    after = shared_ship.unpaused(before, after)
+    with conn:
+        from db import _write_game
+        _write_game(conn, after, save_id)
+    shared_ship.share(conn, room, save_id, before, after)
+    return dc_replace(outcome, state=after)
 
 
 def position_from_payload(payload):
@@ -189,12 +226,12 @@ def enter_room(player_id, room):
     """Join a room: continue its save, or start both players in the cell."""
     game_id = mp.save_id(player_id, room)
     with closing(connect_db(DB_PATH)) as conn:
+        info = shared_ship.join(conn, room, game_id, int(time.time() * 1000))
         state = load_game(conn, game_id)
-        if state is None:
-            new_game(conn, game_id)
     st.session_state.room = room
+    st.session_state.room_generation = info["generation"]
     st.query_params["room"] = room
-    begin_play(state)
+    begin_play(state, info["epoch_ms"])
 
 
 def leave_room():
@@ -300,10 +337,17 @@ def main():
     game_id = mp.save_id(player_id, room) if room else player_id
 
     saved = read_progress(game_id, None if room else st.session_state.browser_backup)
+    room_state = None
     if room:
         if saved is None or not st.session_state.playing:
             enter_room(player_id, room)
             st.rerun()
+        with closing(connect_db(DB_PATH)) as conn:
+            room_state = shared_ship.room_info(conn, room)
+        if room_state["generation"] != st.session_state.get("room_generation"):
+            # The partner restarted the ship: start again in the cell with them.
+            st.session_state.room_generation = room_state["generation"]
+            begin_play(saved, room_state["epoch_ms"])
         new_clicked = continue_clicked = False
     else:
         start_col, continue_col, spacer = st.columns([1, 1, 3])
@@ -395,6 +439,7 @@ def main():
         "multiplayer": {
             "room": room,
             "channel": mp.channel_name(room),
+            "world_version": room_state["version"] if room_state else 0,
             "client_id": mp.save_id(player_id, "ably"),
             "sdk_url": mp.ABLY_SDK_URL,
             "token_request": mp.token_request(api_key, room, mp.save_id(player_id, "ably"), int(time.time() * 1000)),
@@ -412,6 +457,7 @@ def main():
         on_action_change=partial(apply_game_action, game_id),
         on_position_change=lambda: None,
         on_ably_change=lambda: None,
+        on_sync_change=lambda: None,
         key=f"game_canvas_{game_id}",
         width="stretch",
         height=660,

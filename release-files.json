@@ -28,6 +28,7 @@
   "scripts/package_release.py",
   "shiplife.py",
   "multiplayer.py",
+  "shared_ship.py",
   "specs/team-release.md",
   "static/music/README.md",
   "static/music/alert-v1.ogg",
