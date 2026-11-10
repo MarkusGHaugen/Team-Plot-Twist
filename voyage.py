@@ -3,6 +3,11 @@ import json, math
 import logic as L
 from dataclasses import replace
 
+# A cook escort ends at return crate 07. Saves from before the crate moved to
+# the middle deck may still hold an escort that ends in the galley.
+_CRATE = L.STORY_POINTS['return_crate']
+COOK_ESCORT_ENDS = ([1260, 245], [_CRATE['x'], L.FLOORS[_CRATE['zone']][2]])
+
 def progress(s):
  from logic import story_progress
  return {'coins':0,'claimed':[],'paid':[],'armed':False,'duck':False,'hp':2,'shots':[],'next_fire':{},**story_progress(s).get('voyage',{})}
@@ -35,7 +40,7 @@ def valid(v):
  if not isinstance(v.get('next_fire',{}),dict) or any(k not in ('patrol','cargo','dining','lookout','sailor','armorer','medic','boatswain','officer','sleeper') or type(t) is not int or t<0 for k,t in v.get('next_fire',{}).items()):return False
  e=v.get('escort')
  if e is not None and (not isinstance(e,dict) or not {'kind','started','path'}<=set(e) or set(e)-{'kind','started','path','covers','distance','target','updated','paused','hidden','return_path','resume_elapsed'} or e['kind'] not in paid or type(e['started']) is not int or e['started']<0 or not isinstance(e['path'],list) or not 2<=len(e['path'])<=80 or any(not isinstance(p,list) or len(p)!=2 or any(type(x) not in (int,float) or not math.isfinite(x) or abs(x)>3000 for x in p) for p in e['path'])):return False
- if e and (e['path'][-1] != ([1260,245] if e['kind']=='cook' else [1660,245]) or any(not 160<=p[0]<=2580 or not 245<=p[1]<=500 for p in e['path'])):return False
+ if e and (e['path'][-1] not in (COOK_ESCORT_ENDS if e['kind']=='cook' else ([1660,245],)) or any(not 160<=p[0]<=2580 or not 245<=p[1]<=500 for p in e['path'])):return False
  if e and set(e)!={'kind','started','path'}:
   if set(e)!={'kind','started','path','covers','distance','target','updated','paused','hidden','return_path','resume_elapsed'}:return False
   if any(type(e.get(k)) not in (int,float) or not math.isfinite(e[k]) or e[k]<0 for k in ('distance','target','updated','resume_elapsed')):return False
@@ -154,7 +159,8 @@ def voyage_action(s,kind,point,wall,elapsed=0):
   if point in v['paid']:return no('You have already paid.')
   if v['coins']<cost:return no(f'You need {cost} coins.')
   if point=='boatswain' and 'sail' not in p['items']:return no('Find a sail before asking for passage.')
-  target=Position('kitchen',1260) if point=='cook' else Position('aft_deck',1660)
+  crate=STORY_POINTS['return_crate']
+  target=Position(crate['zone'],crate['x']) if point=='cook' else Position('aft_deck',1660)
   v['coins']-=cost;v['paid'].append(point)
   from escort import plan
   v['escort']=plan(s,target,L._position_at_xy(pose.x,pose.y),point,now)

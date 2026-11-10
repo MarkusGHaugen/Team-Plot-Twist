@@ -80,7 +80,7 @@ def tick(state,v,now,elapsed):
    p=L.story_progress(state);p['crate_open']=True;state=replace(state,story_state=json.dumps(p))
   v['guide']={'kind':e['kind'],'path':e['return_path'],'started':now+2200,'speech_until':now+2200,'resume_elapsed':e['resume_elapsed']}
   v.pop('escort',None)
-  return L.ActionResult(save(replace(state,position=position(e['path'][-1]),reached_kitchen=state.reached_kitchen or e['kind']=='cook'),v),True,'Your guide wishes you luck.')
+  return L.ActionResult(save(replace(state,position=position(e['path'][-1]),reached_kitchen=state.reached_kitchen or position(e['path'][-1]).zone=='kitchen'),v),True,'Your guide wishes you luck.')
  if e['paused']:
   next_stop=next((x for x in e['covers'] if x>e['distance']+.01),total)
   if clear_leg(state,e,e['distance'],next_stop,now,elapsed):e.update(target=next_stop,paused=False,hidden=False)
