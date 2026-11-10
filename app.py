@@ -23,6 +23,7 @@ from logic import (GUARD_ROUTES, GUARD_SEGMENTS, MAP_CONFIG, Position, capture_p
                    state_from_backup, story_progress, game_now_ms, route_points)
 from action_transport import handle_action
 from content import DOCUMENTS, ENDINGS, ITEMS, ROLES, STORY_POINTS
+import multiplayer as mp
 
 
 ROOT = Path(__file__).resolve().parent
@@ -174,6 +175,71 @@ def sync_browser_backup(player_id, state):
     )
 
 
+def ably_api_key():
+    """The Ably key from Streamlit secrets or the environment, if configured."""
+    try:
+        key = st.secrets.get("ABLY_API_KEY")
+    except Exception:  # no secrets file at all
+        key = None
+    key = key or os.environ.get("ABLY_API_KEY")
+    return key if mp.valid_api_key(key) else None
+
+
+def enter_room(player_id, room, name):
+    """Join a room: continue its save, or start both players in the cell."""
+    game_id = mp.save_id(player_id, room)
+    with closing(connect_db(DB_PATH)) as conn:
+        state = load_game(conn, game_id)
+        if state is None:
+            new_game(conn, game_id)
+    st.session_state.room = room
+    st.session_state.room_name = name
+    st.query_params["room"] = room
+    begin_play(state)
+
+
+def leave_room():
+    st.session_state.pop("room", None)
+    st.session_state.pop("room_name", None)
+    if "room" in st.query_params:
+        del st.query_params["room"]
+    st.session_state.playing = False
+
+
+def multiplayer_lobby(player_id, api_key):
+    """Create or join a room. Returns True when the page should stop here."""
+    if "room" in st.session_state:
+        room = st.session_state.room
+        info, leave = st.columns([4, 1])
+        info.success(f"Room **{room}** · you are **{st.session_state.room_name}**. "
+                     f"Your friend chooses Multiplayer, enters `{room}` and presses Join.")
+        if leave.button("Leave room", use_container_width=True):
+            leave_room()
+            st.rerun()
+        return False
+    if api_key is None:
+        st.info("Multiplayer needs an Ably API key. Add `ABLY_API_KEY` to the app's Streamlit secrets.")
+        return True
+    st.caption("Two players start in the same cell and see each other move live.")
+    create_col, code_col, join_col = st.columns([1.2, 1.2, 1])
+    with create_col:
+        if st.button("Create room", use_container_width=True, type="primary"):
+            enter_room(player_id, mp.new_room_code(), "Player 1")
+            st.rerun()
+    with code_col:
+        code = st.text_input("Room code", value=st.query_params.get("room", ""), max_chars=mp.ROOM_LENGTH,
+                             placeholder="ABC234", label_visibility="collapsed")
+    with join_col:
+        if st.button("Join", use_container_width=True):
+            room = mp.normalize_room(code)
+            if room is None:
+                st.error(f"A room code has {mp.ROOM_LENGTH} letters and digits.")
+            else:
+                enter_room(player_id, room, "Player 2")
+                st.rerun()
+    return True
+
+
 def main():
     st.markdown(
         """
@@ -221,12 +287,33 @@ def main():
     if not st.session_state.browser_storage_available:
         st.warning("Your browser blocks local storage. Progress may be lost after a server restart.")
 
-    saved = read_progress(player_id, st.session_state.browser_backup)
-    start_col, continue_col, spacer = st.columns([1, 1, 3])
-    with start_col:
-        new_clicked = st.button("New Game", use_container_width=True, type="primary")
-    with continue_col:
-        continue_clicked = st.button("Continue", use_container_width=True, disabled=saved is None)
+    api_key = ably_api_key()
+    if "room" in st.session_state or st.query_params.get("room"):
+        st.session_state.setdefault("mode", "Multiplayer")
+    mode = st.radio("Mode", ["Single player", "Multiplayer"], key="mode", horizontal=True,
+                    label_visibility="collapsed")
+    if mode == "Single player" and "room" in st.session_state:
+        leave_room()
+    room = st.session_state.get("room") if mode == "Multiplayer" else None
+    if mode == "Multiplayer":
+        if multiplayer_lobby(player_id, api_key):
+            return
+        room = st.session_state.room
+    # Each room has its own save, so multiplayer never touches single player.
+    game_id = mp.save_id(player_id, room) if room else player_id
+
+    saved = read_progress(game_id, None if room else st.session_state.browser_backup)
+    if room:
+        if saved is None or not st.session_state.playing:
+            enter_room(player_id, room, st.session_state.room_name)
+            st.rerun()
+        new_clicked = continue_clicked = False
+    else:
+        start_col, continue_col, spacer = st.columns([1, 1, 3])
+        with start_col:
+            new_clicked = st.button("New Game", use_container_width=True, type="primary")
+        with continue_col:
+            continue_clicked = st.button("Continue", use_container_width=True, disabled=saved is None)
 
     if new_clicked:
         if saved is None:
@@ -308,6 +395,14 @@ def main():
                          for name,segments in GUARD_ROUTES.items()},
         "bright_view": bright_view,
         "rules": {**MAP_CONFIG,"story_points":{**STORY_POINTS,"seal_chest":{**STORY_POINTS['seal_chest'],"item":'captain_uniform' if 'officer' in progress.get('voyage',{}).get('concealed',{}) else 'seal'}},"watch_path":route_points(Position("cabin",300),Position("chest_room",1320))},
+        "multiplayer": {
+            "room": room,
+            "name": st.session_state.room_name,
+            "channel": mp.channel_name(room),
+            "client_id": mp.save_id(player_id, "ably"),
+            "sdk_url": mp.ABLY_SDK_URL,
+            "token_request": mp.token_request(api_key, room, mp.save_id(player_id, "ably"), int(time.time() * 1000)),
+        } if room and api_key else None,
         "feedback": {
             "seq": st.session_state.feedback_seq,
             "request_id": st.session_state.get("feedback_request_id", ""),
@@ -318,9 +413,10 @@ def main():
     result = game_component()(
         data=data,
         default={"position": {**asdict(saved.position),"run_id":st.session_state.run_id}},
-        on_action_change=partial(apply_game_action, player_id),
+        on_action_change=partial(apply_game_action, game_id),
         on_position_change=lambda: None,
-        key=f"game_canvas_{player_id}",
+        on_ably_change=lambda: None,
+        key=f"game_canvas_{game_id}",
         width="stretch",
         height=660,
     )
@@ -331,10 +427,11 @@ def main():
         position = position_from_payload(result.position)
         if position is not None and result.position.get("run_id")==st.session_state.run_id:
             with closing(connect_db(DB_PATH)) as conn:
-                save_position(conn, position, player_id)
+                save_position(conn, position, game_id)
 
-    current = read_progress(player_id)
-    sync_browser_backup(player_id, current)
+    current = read_progress(game_id)
+    if not room:
+        sync_browser_backup(player_id, current)
     if current is not None:
         inventory, doorway, place = st.columns(3)
         items = []

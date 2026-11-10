@@ -27,6 +27,7 @@
   "runtime_loader.py",
   "scripts/package_release.py",
   "shiplife.py",
+  "multiplayer.py",
   "specs/team-release.md",
   "static/music/README.md",
   "static/music/alert-v1.ogg",
