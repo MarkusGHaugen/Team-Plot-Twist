@@ -22,7 +22,7 @@ uv run pytest -q
 ## Six escape routes
 
 - **Takeover:** Defeat every opponent and use the helm.
-- **Crate 07:** Open the crate with a crowbar or bribe the cook. Keep the cook alive and wait for the next port.
+- **Crate 07:** Return crate 07 waits on the middle deck between the two barrels. Open it with a crowbar or bribe the cook. Keep the cook alive and wait for the next port.
 - **Dinghy:** Find a sail and rope, or bring a sail and bribe the boatswain.
 - **Command:** Ambush the officer from a barrel, equip the captain uniform from the cabin chest, let any search settle, and command the helm with other crew still alive.
 - **Drugged stew:** Take the sleeping pills from the sea chest in the cabin and crush them into the galley stew. Five seconds later the cook serves it, the whole crew eats in the mess hall and falls asleep for two minutes. Take the dinghy or the helm before they wake. A gunshot or the cannon wakes them.
