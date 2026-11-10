@@ -38,6 +38,15 @@ Use this repository for a separate Streamlit app if the group wants an online ve
 
 The online game is at https://team-plot-twist.streamlit.app and updates itself from `main`.
 
+## Multiplayer setup (Ably)
+
+Multiplayer sends live positions between the two browsers through [Ably](https://ably.com); the game rules stay on the Streamlit server. It needs an Ably API key with publish, subscribe and presence:
+
+- **Locally:** create `.streamlit/secrets.toml` (ignored by Git) with `ABLY_API_KEY = "your-key"`.
+- **Online:** add the same line under the app's Settings → Secrets on Streamlit Community Cloud.
+
+Never commit the key or put it in `game.js`: the server signs a short-lived token limited to one room's channel. Without a key, Multiplayer shows a short notice and single player works as before. The Ably free plan allows 6 million messages a month; positions are only sent while a player moves (at most 8 a second).
+
 ## Keeping online play fast
 
 Online, every request to the server is a round trip of roughly half a second, while on your own machine it is almost instant. Keep this in mind:

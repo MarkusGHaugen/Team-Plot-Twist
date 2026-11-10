@@ -1028,6 +1028,130 @@ function cameraFor(player,w,h,zone) {
   return {zoom,x:player.x-w/(2*zoom),y:player.y-h*.64/zoom};
 }
 
+// Multiplayer: two browsers share live positions through Ably. The Streamlit
+// server is not polled; it only signs a short-lived token for the room's
+// channel. Connections outlive Streamlit reruns, keyed by component key.
+const rooms = globalThis.__teamPlotTwistRooms ??= new Map();
+const PARTNER_SEND_MS=125,PARTNER_HEARTBEAT_MS=5000,PARTNER_TOKEN_FRESH_MS=30000;
+function loadAbly(url) {
+  if(globalThis.AblyPubSub) return Promise.resolve(globalThis.AblyPubSub);
+  return globalThis.__teamPlotTwistAbly ??= new Promise((resolve,reject)=>{
+    const script=document.createElement('script');script.src=url;script.async=true;
+    script.onload=()=>resolve(globalThis.AblyPubSub);script.onerror=()=>{globalThis.__teamPlotTwistAbly=null;reject(new Error('Ably SDK did not load'));};
+    document.head.appendChild(script);
+  });
+}
+function closeMultiplayer(key) {
+  const mp=rooms.get(key);if(!mp)return;
+  rooms.delete(key);mp.closed=true;
+  try{Promise.resolve(mp.channel?.presence.leave()).catch(()=>{});}catch(_){}
+  try{mp.realtime?.close();}catch(_){}
+}
+function refreshPartners(mp) {
+  if(!mp.channel)return;
+  mp.channel.presence.get().then(members=>{
+    if(mp.closed)return;
+    const ordered=[...members].sort((a,b)=>a.timestamp-b.timestamp);
+    const mine=ordered.findIndex(m=>m.clientId===mp.clientId);
+    mp.full=mine>=MAX_ROOM_PLAYERS;
+    // Names follow the order players entered the room, so a reload or a
+    // second Join never gives two players the same name.
+    const otherIndex=ordered.findIndex(m=>m.clientId!==mp.clientId);
+    mp.partnerName=otherIndex<0?null:`Player ${otherIndex+1}`;
+    if(!other)mp.partner=null;
+  }).catch(()=>{});
+}
+const MAX_ROOM_PLAYERS=2;
+function syncMultiplayer(client,data,key,setTriggerValue) {
+  const m=data.multiplayer;
+  if(!m){closeMultiplayer(key);return;}
+  let mp=rooms.get(key);
+  if(mp&&mp.room!==m.room){closeMultiplayer(key);mp=null;}
+  if(mp){
+    mp.client=client;mp.token={request:m.token_request,at:performance.now()};
+    if(mp.pendingAuth){const done=mp.pendingAuth;mp.pendingAuth=null;done(m.token_request);}
+    return;
+  }
+  mp={key,room:m.room,clientId:m.client_id,client,status:'connecting',partner:null,partnerName:null,
+      token:{request:m.token_request,at:performance.now()},pendingAuth:null,lastSent:'',lastSentAt:0,forceSend:true};
+  rooms.set(key,mp);
+  loadAbly(m.sdk_url).then(AblyPubSub=>{
+    if(mp.closed)return;
+    mp.realtime=AblyPubSub.createClient({clientId:m.client_id,echoMessages:false,authCallback:(params,callback)=>{
+      // A token request is single-use and must be fresh; ask the server for a
+      // new one (one Streamlit run) only when the last one is used or old.
+      const t=mp.token;
+      if(t.request!==mp.usedRequest&&performance.now()-t.at<PARTNER_TOKEN_FRESH_MS){mp.usedRequest=t.request;callback(null,t.request);return;}
+      mp.pendingAuth=request=>{mp.usedRequest=request;callback(null,request);};
+      setTriggerValue('ably',{room:m.room,at:Date.now()});
+    }});
+    mp.realtime.connection.on(change=>{mp.status=change.current;if(change.current==='connected'){mp.forceSend=true;publishPosition(mp.client,mp.key,performance.now());}});
+    mp.channel=mp.realtime.channels.get(m.channel);
+    mp.channel.subscribe('pos',message=>{
+      if(mp.closed||message.clientId===mp.clientId)return;
+      const p=message.data||{};
+      if(typeof p.x!=='number'||typeof p.y!=='number')return;
+      const before=mp.partner;
+      mp.partner={...p,receivedAt:performance.now(),shownX:before?.shownX??p.x,shownY:before?.shownY??p.y,
+        movedAt:before&&(before.x!==p.x||before.y!==p.y)?performance.now():before?.movedAt??0};
+    });
+    // A newcomer must see us at once, even if our tab is in the background
+    // and its animation frames (and so the regular sends) are paused.
+    mp.channel.presence.subscribe(member=>{
+      if(member.clientId!==mp.clientId){mp.forceSend=true;publishPosition(mp.client,mp.key,performance.now());}
+      refreshPartners(mp);
+    });
+    mp.channel.presence.enter({}).then(()=>refreshPartners(mp)).catch(()=>{mp.status='failed';});
+  }).catch(error=>{mp.status='failed';console.error('Team Plot Twist multiplayer could not start',error);});
+}
+function partnerSnapshot(client) {
+  const d=client.data,xy=positionXY(client.position,d.rules),vv=d.story?.voyage||{};
+  return {x:Math.round(xy.x),y:Math.round(xy.y),f:client.facing==='left'?-1:1,
+    h:Boolean(d.hidden_barrel||d.in_hammock||client.position.zone==='hammock'||vv.escort?.hidden),
+    c:Boolean(vv.duck||vv.escort),g:Boolean(d.disguised),cap:Boolean(vv.captain_worn),e:Boolean(d.ending)};
+}
+// Send only when something changed (at most 8 a second) plus a slow heartbeat,
+// so standing still or reading a letter costs almost no Ably messages.
+function publishPosition(client,key,now) {
+  const mp=rooms.get(key);
+  if(!mp?.channel||mp.status!=='connected'||mp.full)return;
+  const snap=JSON.stringify(partnerSnapshot(client));
+  const changed=snap!==mp.lastSent;
+  if(!(mp.forceSend||changed&&now-mp.lastSentAt>=PARTNER_SEND_MS||now-mp.lastSentAt>=PARTNER_HEARTBEAT_MS))return;
+  mp.forceSend=false;mp.lastSent=snap;mp.lastSentAt=now;
+  mp.channel.publish('pos',JSON.parse(snap)).catch(()=>{});
+}
+function drawPartner(ctx,client) {
+  const mp=rooms.get(client.key),p=mp?.partner;
+  if(!p||!mp.partnerName||p.h||p.e)return;
+  const now=performance.now(),dt=Math.min(.1,(now-(p.drawnAt??now))/1000);p.drawnAt=now;
+  // Ease toward the latest position so 8 updates a second look smooth.
+  const far=Math.hypot(p.x-p.shownX,p.y-p.shownY)>220,k=far?1:Math.min(1,dt*14);
+  p.shownX+=(p.x-p.shownX)*k;p.shownY+=(p.y-p.shownY)*k;
+  const moving=performance.now()-p.movedAt<300,style=p.cap?client.data.rules.guard_styles.officer:{color:p.g?'#9c3d33':'#7a4f9a'};
+  const args=[ctx,p.shownX,p.shownY,false,performance.now()/1000,'none',p.f<0?'left':'right',moving,p.g,'patrol',style];
+  if(p.c)crouchingPerson(...args);else person(...args);
+}
+// The name tag is drawn after the cell bars so it is never hidden behind them.
+function drawPartnerName(ctx,client) {
+  const mp=rooms.get(client.key),p=mp?.partner;
+  if(!p||!mp.partnerName||p.h||p.e||p.shownX===undefined)return;
+  const text=String(mp.partnerName),y=p.shownY-(p.c?72:90);
+  ctx.save();ctx.font='bold 11px Georgia, serif';
+  const width=ctx.measureText(text).width+12;
+  roundBox(ctx,p.shownX-width/2,y-12,width,16,6,'rgba(122,79,154,.85)','rgba(240,225,255,.7)');
+  ctx.fillStyle='#fbf3ff';ctx.fillText(text,p.shownX-width/2+6,y);ctx.restore();
+}
+function drawRoomBadge(ctx,w,client) {
+  const mp=rooms.get(client.key);if(!mp)return;
+  const status=mp.full?'ROOM FULL':mp.status==='failed'?'OFFLINE':mp.status!=='connected'?'CONNECTING…':mp.partnerName?`${mp.partnerName.toUpperCase()} IS HERE`:'WAITING FOR PLAYER 2';
+  const text=`ROOM ${mp.room} · ${status}`;
+  ctx.save();ctx.font='bold 12px Georgia, serif';
+  const width=ctx.measureText(text).width+20;
+  roundBox(ctx,w-width-12,12,width,24,8,'rgba(20,24,28,.72)','rgba(230,205,150,.6)');
+  ctx.fillStyle=mp.full||mp.status==='failed'?'#f0a08a':'#f1dfb4';ctx.fillText(text,w-width-2,28);ctx.restore();
+}
+
 function draw(client, canvas, stage, guards) {
   const dpr = window.devicePixelRatio || 1;
   const w = Math.max(320, stage.clientWidth), h = stage.clientHeight;
@@ -1111,6 +1235,7 @@ function draw(client, canvas, stage, guards) {
     // A small glimpse of the hat makes it clear where the guide has concealed you.
     line(ctx,player.x-14,player.y-36,player.x+14,player.y-36,'#b5c9be',4);
   }
+  drawPartner(ctx,client);
   for(const b of vv.shots||[]) {
     const age=(gameNow(client.data)-b.born)/1000;
     if(age<0){label(ctx,'!',b.x-5,b.y-25,22);continue;}
@@ -1122,6 +1247,7 @@ function draw(client, canvas, stage, guards) {
     ctx.beginPath();ctx.arc(bullet.x,bullet.y,4,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
   }
   cellBars(ctx, Boolean(client.data.door_open || client.capture?.phase==="escort" || gameNow(client.data)>=client.data.alert_started_ms&&gameNow(client.data)<client.data.alert_until_ms&&guards.patrol.x<390&&guards.patrol.y===500));
+  drawPartnerName(ctx,client);
   ctx.restore();
   const dim=client.data.bright_view?.25:.61;
   const radius=(client.data.has_lamp&&client.data.lamp_lit&&client.data.held_item==="lamp"?295:205)*camera.zoom;
@@ -1130,6 +1256,7 @@ function draw(client, canvas, stage, guards) {
   shade.addColorStop(0,"rgba(8,16,25,0)");shade.addColorStop(.58,`rgba(8,16,25,${dim*.28})`);
   shade.addColorStop(1,`rgba(8,16,25,${dim})`);
   ctx.fillStyle=shade;ctx.fillRect(0,0,w,h);
+  drawRoomBadge(ctx,w,client);
 }
 
 function editingTarget(target) {
@@ -1166,6 +1293,8 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
   data.parsedAlertResume=JSON.parse(data.alert_resume || "{}");
   client.wasEscorted=Boolean(client.data?.story?.voyage?.escort);
   client.data = data;
+  client.key = key;
+  syncMultiplayer(client,data,key,setTriggerValue);
   if (data.feedback?.seq !== client.lastFeedbackSeq) {
     client.lastFeedbackSeq = data.feedback?.seq;
     const matching=!client.actionInFlight || data.feedback?.request_id===undefined || data.feedback.request_id===client.inFlightPayload?.request_id;
@@ -1482,6 +1611,7 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
       client.feastStage=stage2;
     }
     reportPosition();
+    publishPosition(client,key,now);
     draw(client, canvas, stage, guards);
     endingPanel.hidden=!client.data.ending||endingPreludeActive(client);
     parentElement.querySelector('.pt-game').classList.toggle('is-complete',Boolean(client.data.ending));

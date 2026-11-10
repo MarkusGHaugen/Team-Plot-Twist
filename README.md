@@ -19,6 +19,10 @@ Open **http://localhost:8535**. On a Mac you can also run `run-team.command`; on
 uv run pytest -q
 ```
 
+## Single player or multiplayer
+
+Choose **Single player** or **Multiplayer** above the game. In multiplayer one player presses **Create room** and shares the six-letter code; the other enters it and presses **Join**. Both start in the cell and see each other move live. Multiplayer is in beta: each player still has their own ship, so doors, items and guards are not shared yet. Setup of the Ably key is described in [CONTRIBUTING.md](CONTRIBUTING.md#multiplayer-setup-ably).
+
 ## Six escape routes
 
 - **Takeover:** Defeat every opponent and use the helm.
