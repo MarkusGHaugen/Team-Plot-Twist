@@ -5,6 +5,7 @@ import sqlite3
 from dataclasses import asdict, fields
 from dataclasses import replace
 from pathlib import Path
+from content import ENDINGS
 from logic import (ActionResult, GameState, Position, change_outfit, finish_capture,
     initial_state, open_door, raise_alert, search_crate, select_item, shoot_guard,
     start_capture, state_from_backup, steal_blue_key, steal_key, take_pistol,
@@ -58,9 +59,12 @@ for _kind in GUARD_ROUTES:
     _COLUMNS.setdefault(f'{_kind}_alive',f'INTEGER NOT NULL DEFAULT 1 CHECK ({_kind}_alive IN (0,1))')
     _COLUMNS.setdefault(f'{_kind}_corpse_x','REAL')
     _COLUMNS.setdefault(f'{_kind}_corpse_y','REAL')
+# Ending IDs come from the same source as game and browser-save validation.
+_ENDING_VALUES = ','.join("'" + ending.replace("'", "''") + "'" for ending in ('', *ENDINGS))
+_ENDING_CHECK = f'CHECK (ending IN ({_ENDING_VALUES}))'
 _COLUMNS.update({
     'story_state': "TEXT NOT NULL DEFAULT '{}'",
-    'ending': "TEXT NOT NULL DEFAULT '' CHECK (ending IN ('','takeover','crate','dinghy','command'))",
+    'ending': f"TEXT NOT NULL DEFAULT '' {_ENDING_CHECK}",
     'reading': "TEXT NOT NULL DEFAULT ''",
     'paused_at_ms': 'INTEGER NOT NULL DEFAULT 0',
     'paused_total_ms': 'INTEGER NOT NULL DEFAULT 0',
@@ -71,42 +75,69 @@ player_id TEXT PRIMARY KEY, zone TEXT NOT NULL, position_value REAL NOT NULL,
 has_key INTEGER NOT NULL, door_open INTEGER NOT NULL, reached_kitchen INTEGER NOT NULL,
 """ + ',\n'.join(f'{key} {sql}' for key,sql in _COLUMNS.items()) + ')'
 
+def _progress_schema(conn: sqlite3.Connection) -> tuple[set[str], bool]:
+    definition = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='progress'"
+    ).fetchone()
+    if definition is None:
+        return set(), False
+    columns = {row['name'] for row in conn.execute('PRAGMA table_info(progress)')}
+    sql = definition['sql']
+    rebuild = (
+        'player_id' not in columns
+        or ('held_item' in columns and "'lamp'" not in sql)
+        or ('ending' in columns and _ENDING_CHECK not in sql)
+    )
+    return columns, rebuild
+
+
 def connect_db(path: str | Path) -> sqlite3.Connection:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path,timeout=5)
+    conn = sqlite3.connect(path, timeout=5)
     conn.row_factory = sqlite3.Row
-    columns = {r['name'] for r in conn.execute('PRAGMA table_info(progress)')}
-    held_missing = bool(columns) and 'held_item' not in columns
-    wardrobe_contents_missing = bool(columns) and 'wardrobe_contents' not in columns
-    old_sql_row=conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='progress'").fetchone()
-    old_sql=old_sql_row['sql'] if old_sql_row else ''
-    with conn:
-        if columns and ('player_id' not in columns or ('held_item' in columns and "'lamp'" not in old_sql) or ('ending' in columns and ("'dinghy'" not in old_sql or "'command'" not in old_sql))):
-            conn.execute('ALTER TABLE progress RENAME TO progress_legacy')
-            conn.execute(_CREATE)
-            shared=[key for key in _KEYS if key in columns]
-            if 'player_id' in columns:
-                copied=['player_id',*shared]
-                conn.execute(f"INSERT INTO progress ({','.join(copied)}) SELECT {','.join(copied)} FROM progress_legacy")
+    try:
+        columns, rebuild = _progress_schema(conn)
+        if not rebuild and _COLUMNS.keys() <= columns:
+            return conn
+
+        # Serialize schema changes and recheck after another session may have migrated.
+        # An explicit transaction also rolls back SQLite DDL if copying a save fails.
+        with conn:
+            conn.execute('BEGIN IMMEDIATE')
+            columns, rebuild = _progress_schema(conn)
+            if rebuild:
+                conn.execute('ALTER TABLE progress RENAME TO progress_legacy')
+                conn.execute(_CREATE)
+                shared = ','.join(key for key in _KEYS if key in columns)
+                if 'player_id' in columns:
+                    conn.execute(f"INSERT INTO progress (player_id,{shared}) "
+                                 f"SELECT player_id,{shared} FROM progress_legacy")
+                else:
+                    conn.execute(f"INSERT INTO progress (player_id,{shared}) "
+                                 f"SELECT 'local',{shared} FROM progress_legacy WHERE id=1")
+                conn.execute('DROP TABLE progress_legacy')
+            elif not columns:
+                conn.execute(_CREATE)
             else:
-                shared=[key for key in shared if key!='player_id']
-                conn.execute(f"INSERT INTO progress (player_id,{','.join(shared)}) SELECT 'local',{','.join(shared)} FROM progress_legacy WHERE id=1")
-            conn.execute('DROP TABLE progress_legacy')
-        else:
-            conn.execute(_CREATE)
-            for key,sql in _COLUMNS.items():
-                if columns and key not in columns: conn.execute(f'ALTER TABLE progress ADD COLUMN {key} {sql}')
-        if held_missing:
-            conn.execute("""UPDATE progress SET held_item = CASE
-                WHEN has_pistol=1 THEN 'pistol'
-                WHEN has_blue_key=1 THEN 'blue_key'
-                WHEN has_key=1 THEN 'cell_key' ELSE 'none' END""")
-        if wardrobe_contents_missing:
-            conn.execute("UPDATE progress SET wardrobe_contents=CASE WHEN disguised=1 THEN 'player_clothes' ELSE 'uniform' END")
-    if columns and 'lamp_revealed' not in columns:
-        with conn: conn.execute("UPDATE progress SET lamp_revealed=1 WHERE has_lamp=1")
+                for key, sql in _COLUMNS.items():
+                    if key not in columns:
+                        conn.execute(f'ALTER TABLE progress ADD COLUMN {key} {sql}')
+
+            if columns and 'held_item' not in columns:
+                conn.execute("""UPDATE progress SET held_item = CASE
+                    WHEN has_pistol=1 THEN 'pistol'
+                    WHEN has_blue_key=1 THEN 'blue_key'
+                    WHEN has_key=1 THEN 'cell_key' ELSE 'none' END""")
+            if columns and 'wardrobe_contents' not in columns:
+                conn.execute("UPDATE progress SET wardrobe_contents=CASE WHEN disguised=1 THEN 'player_clothes' ELSE 'uniform' END")
+            if columns and 'lamp_revealed' not in columns:
+                conn.execute("UPDATE progress SET lamp_revealed=1 WHERE has_lamp=1")
+    except Exception:
+        conn.close()
+        raise
     return conn
+
 
 def load_game(conn: sqlite3.Connection, player_id: str='local') -> GameState | None:
     row = conn.execute('SELECT * FROM progress WHERE player_id=?',(player_id,)).fetchone()
