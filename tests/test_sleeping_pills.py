@@ -1,5 +1,8 @@
 """Sleeping pills: a drugged meal for the whole crew, or a fake death in the cell."""
 import json, math
+import re
+import sqlite3
+from contextlib import closing
 from dataclasses import asdict, replace
 import pytest
 import logic as L
@@ -139,6 +142,49 @@ def test_swallowing_the_pills_in_the_cell_ends_in_the_castaway_ending():
     # The floor point does not cover the letter or the door.
     assert p['x'] - p['reach'] > L.STORY_POINTS['opening_letter']['x'] + L.STORY_POINTS['opening_letter']['reach']
     assert p['x'] + p['reach'] < L.CELL_KEY_PLAYER_MIN
+
+
+@pytest.mark.parametrize('legacy', [False, True], ids=['fresh', 'four-ending-save'])
+@pytest.mark.parametrize('ending', ['castaway', 'lullaby'])
+def test_sleeping_pill_endings_persist(tmp_path, legacy, ending):
+    from db import apply_action, connect_db, load_game, restore_game
+
+    path = tmp_path / 'game.sqlite3'
+    if ending == 'castaway':
+        floor = L.STORY_POINTS['cell_floor']
+        saved = accepted(story_action(free('cell', floor['x']), 'inspect', 'cell_floor', 1000))
+        action, point, now = 'story_finish', 'cell_floor', 2000
+    else:
+        helm = L.STORY_POINTS['helm']
+        saved = replace(drugged(), position=Position(helm['zone'], helm['x']))
+        now = max(story_progress(saved)['voyage']['feast']['sleep'].values()) + 1
+        action, point = 'story_inspect', 'helm'
+
+    if legacy:
+        with closing(connect_db(tmp_path / 'schema.sqlite3')) as conn:
+            schema = conn.execute("SELECT sql FROM sqlite_master WHERE name='progress'").fetchone()[0]
+        schema, matches = re.subn(
+            r'CHECK \(ending IN \([^)]*\)\)',
+            "CHECK (ending IN ('','takeover','crate','dinghy','command'))",
+            schema,
+        )
+        assert matches == 1
+        with closing(sqlite3.connect(path)) as conn:
+            conn.execute(schema)
+            assert restore_game(conn, saved, 'player')
+            assert restore_game(conn, initial_state(), 'other-player')
+
+    with closing(connect_db(path)) as conn:
+        if not legacy:
+            assert restore_game(conn, saved, 'player')
+        assert load_game(conn, 'player') == saved
+        result = apply_action(conn, action, saved.position, 0, 'player', item=point, now_ms=now)
+        assert result.accepted and result.state.ending == ending
+
+    with closing(connect_db(path)) as conn:
+        assert load_game(conn, 'player') == result.state
+        if legacy:
+            assert load_game(conn, 'other-player') == initial_state()
 
 
 def test_endings_are_numbered_out_of_six():
