@@ -206,6 +206,12 @@ def apply_action(conn: sqlite3.Connection,kind: str,position: Position,guard_ela
     if kind=='restart_game':
         if state.reading!='restart_confirm' and not state.ending:return ActionResult(state,False,'Confirm restart first.')
         return ActionResult(new_game(conn,player_id),True,'A new escape begins.')
+    import finale
+    if kind in finale.KINDS:
+        result=finale.dispatch(state,kind,item,wall_now)
+        if result.accepted:
+            with conn:_write_game(conn,result.state,player_id)
+        return result
     if state.ending: return ActionResult(state,False,'The journey is complete. Start a new game to try another route.')
     if state.reading:
         if kind not in ('close_reading', 'story_finish'):

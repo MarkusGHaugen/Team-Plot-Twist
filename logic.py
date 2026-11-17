@@ -704,14 +704,22 @@ def state_from_backup(payload: object) -> GameState | None:
         barrel=next(b for b in BARRELS if b[0]==barrel_id)
         if kind!='sleeper' and (getattr(state,kind+'_corpse_x'),getattr(state,kind+'_corpse_y'))!=position_xy(Position(barrel[1],barrel[2])):return None
     if v.get('captain_worn') and not state.disguised:return None
-    if ending=='command' and not captain_ready(state):return None
-    if ending == 'takeover' and opponents_remaining(state): return None
-    if ending == 'crate' and not crate_ready(state): return None
-    if ending == 'dinghy':
+    cannon_finale=v.get('finale')
+    if cannon_finale is not None:
+        # The finale belongs to an ending: a win turns it into "free", anything else keeps it.
+        if cannon_finale['status']=='won':
+            if ending!='free':return None
+        elif ending!=cannon_finale['origin']:return None
+    elif ending=='free':return None
+    reached=cannon_finale['origin'] if ending=='free' else ending
+    if reached=='command' and not captain_ready(state):return None
+    if reached == 'takeover' and opponents_remaining(state): return None
+    if reached == 'crate' and not crate_ready(state): return None
+    if reached == 'dinghy':
         from voyage import boat_ready
         if not boat_ready(state):return None
-    if ending == 'lullaby' and not v.get('stew_drugged'): return None
-    if ending == 'castaway' and 'sleeping_pills' not in story_progress(state)['items']: return None
+    if reached == 'lullaby' and not v.get('stew_drugged'): return None
+    if reached == 'castaway' and 'sleeping_pills' not in story_progress(state)['items']: return None
     if ending and (state.capture_phase != 'none' or state.hidden_barrel or state.in_hammock): return None
     return state if valid_position(state.position,state.door_open) else None
 
