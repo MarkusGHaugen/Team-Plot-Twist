@@ -2,7 +2,7 @@ import json,subprocess,shutil
 from pathlib import Path
 from dataclasses import asdict,replace
 from logic import initial_state,Position,MAP_CONFIG,toggle_hammock
-from test_canvas_rules import canvas
+from test_canvas_rules import canvas, require_node
 
 def test_hammock_action_and_prompt_stay_at_cabin():
  s=replace(initial_state(),has_key=True,door_open=True,position=Position('chest_room',1120))
@@ -20,7 +20,7 @@ def test_walking_blue_key_draws_even_with_pistol():
 def async_canvas(expression):
  source=Path('game_component/game.js').read_text().replace('export default function','function mount')
  runner="const vm=require('vm'),v=JSON.parse(require('fs').readFileSync(0,'utf8')),c={URL};vm.createContext(c);vm.runInContext(v.source,c);Promise.resolve(vm.runInContext(v.expression,c)).then(r=>console.log(JSON.stringify(r))).catch(e=>{console.error(e);process.exitCode=1});"
- result=subprocess.run([shutil.which('node'),'-e',runner],input=json.dumps({'source':source,'expression':expression}),capture_output=True,text=True,check=True)
+ result=subprocess.run([require_node(),'-e',runner],input=json.dumps({'source':source,'expression':expression}),capture_output=True,text=True,check=True)
  return json.loads(result.stdout)
 
 MOCK=r'''

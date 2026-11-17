@@ -25,6 +25,7 @@ from action_transport import handle_action
 from content import DOCUMENTS, ENDINGS, ITEMS, ROLES, STORY_POINTS
 import multiplayer as mp
 import shared_ship
+from journal import journal_hints
 
 
 ROOT = Path(__file__).resolve().parent
@@ -405,6 +406,7 @@ def main():
     progress = story_progress(saved)
     data = {**asdict(saved),
         "story": progress,
+        "journal_hints": journal_hints(saved, int(time.time() * 1000)),
         "documents": DOCUMENTS,
         "endings": ENDINGS,
         "roles": ROLES,

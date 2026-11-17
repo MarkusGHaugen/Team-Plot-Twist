@@ -283,3 +283,20 @@
 .pt-stage {flex:1;min-height:180px;}
 .pt-game:fullscreen {height:100dvh;}
 .pt-game:fullscreen .pt-stage {min-height:0;}
+
+.pt-journal-guidance h3, .pt-discoveries-heading {
+  margin:22px 0 12px; color:#294b47; font:700 18px Georgia,serif;
+}
+.pt-journal-card {
+  margin:10px 0; padding:15px 17px; border:1px solid #b6a47f;
+  border-left:2px solid #52766b; border-radius:7px; background:#fffaf080;
+  box-shadow:0 2px 5px #75624508;
+}
+.pt-hint-status { display:block; color:#4d6559; font:750 10px/1.5 system-ui,sans-serif; letter-spacing:.06em; text-transform:uppercase; }
+.pt-hint-title { margin:4px 0 7px; font:700 17px Georgia,serif; }
+.pt-hint-text, .pt-hint-clearer { margin:7px 0; font:14px/1.6 system-ui,sans-serif; }
+.pt-journal-card summary { width:fit-content; cursor:pointer; color:#31534e; font:750 12px/1.6 system-ui,sans-serif; padding:5px 0; }
+.pt-hint-clearer { padding:9px 0 0; border-top:1px solid #b6a47f88; }
+.pt-journal-empty { color:#645b49; font:14px/1.6 system-ui,sans-serif; }
+.pt-document-panel :is(summary,button):focus-visible { outline:3px solid #315d60; outline-offset:3px; border-radius:3px; }
+.pt-document-hint[hidden], .pt-journal-guidance[hidden], .pt-discoveries-heading[hidden] { display:none; }

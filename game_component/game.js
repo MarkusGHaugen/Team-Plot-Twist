@@ -1673,22 +1673,23 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
     action("shoot");
   }
   function onKeyDown(event) {
-    if (event.metaKey || event.ctrlKey || event.altKey || editingTarget(event.target)) return;
+    // Window listeners see the shadow host as target, not the focused input.
+    const target=event.composedPath?.()[0] || event.target;
+    if (event.metaKey || event.ctrlKey || event.altKey || editingTarget(target)) return;
     const k = event.key.toLowerCase();
     if (!controlKey(k)) return;
-    if (k.startsWith("arrow") || k === " ") event.preventDefault();
+    if (!client.data.reading && (k.startsWith("arrow") || k === " ")) event.preventDefault();
     if(introProgress(client)!==null){if(k==='escape')skipIntro();return;}
     if(client.restartPrompt){if((k==='f'||k==='escape')&&!event.repeat)closeDocument();event.preventDefault();return;}
     if(client.data.ending) { if(controlKey(k)) event.preventDefault();return; }
     if(client.data.reading) {
-      if(controlKey(k)) event.preventDefault();
-      if((k==="f"||k==="escape") && !event.repeat) action("close_reading");
+      if((k==="f"||k==="escape") && !event.repeat) {event.preventDefault();action("close_reading");}
       return;
     }
     if(client.readingPending) { if(controlKey(k)) event.preventDefault();return; }
 
     if(k === "escape"){client.inventoryOpen=false;client.scope=null;return;}
-    if(k === "j" && !event.repeat) {event.preventDefault();action("journal");return;}
+    if(k === "j" && !event.repeat) {event.preventDefault();client.documentOrigin="stage";action("journal");return;}
     if(client.data.capture_phase === "active" || client.capturePending) return;
     if(client.ambushAnim && (k==='e'||k==='f')) {event.preventDefault();return;}
     if(client.data.hidden_barrel && k==='e') {
@@ -1754,12 +1755,16 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
   function onKeyUp(event) {
     const k = event.key.toLowerCase();
     if (!controlKey(k)) return;
-    if ((k.startsWith("arrow") || k === " ") && !editingTarget(event.target)) event.preventDefault();
     client.keys.delete(k);
+    if(editingTarget(event.composedPath?.()[0] || event.target)) return;
+    if (!client.data.reading && (k.startsWith("arrow") || k === " ")) event.preventDefault();
     reportPosition(true);
   }
   function onBlur() { client.keys.clear(); reportPosition(true); }
-  function onPointerDown() { stage.focus({ preventScroll: true }); }
+  function onPointerDown(event) {
+    if(event.target.closest?.('.pt-document-panel')) return;
+    stage.focus({ preventScroll: true });
+  }
   function onItemClick(event){
     const item=event.currentTarget.dataset.item;
     if(client.data.ending || client.data.reading || client.data.capture_phase==="active" || client.data.hidden_barrel) return;
@@ -1767,11 +1772,11 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
   }
   function closeDocument(){if(client.restartPrompt){client.restartPrompt=false;renderStoryPanels(parentElement,client);}else if(!client.actionInFlight) action('close_reading');}
   function confirmEnding(){if(client.data.reading==='restart_confirm'||client.restartPrompt){action('restart_game');return;} if(!client.actionInFlight) action("story_finish",client.data.reading==="confirm_castaway"?"cell_floor":client.data.reading==="confirm_dinghy"?"lifeboat":client.data.reading==="confirm_takeover"?"helm":"return_crate"); }
-  function openJournal(){ if(!client.data.reading) action("journal"); }
+  function openJournal(){ if(!client.data.reading) {client.documentOrigin='journal';action("journal");} }
   function replay(){ client.endingStartedAt=performance.now(); }
   function trapDocumentFocus(event){
     if(event.key!=="Tab") return;
-    const stops=[...documentPanel.querySelectorAll('button:not([hidden]),summary')].filter(el=>!el.disabled);
+    const stops=[...documentPanel.querySelectorAll('button,summary')].filter(el=>!el.disabled && !el.closest('[hidden]'));
     const current=event.composedPath()[0],i=stops.indexOf(current);
     if(!stops.length) return;
     if(event.shiftKey && i<=0){event.preventDefault();stops.at(-1).focus();}
@@ -1929,7 +1934,7 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
     }
     feedback.hidden = Boolean(client.data.ending || client.data.reading) || !client.flashText || now >= client.flashUntil;
     if (!feedback.hidden) feedback.textContent = client.flashText;
-    documentPanel.querySelector(".pt-document-feedback").textContent=client.data.reading?client.flashText:"";
+    documentPanel.querySelector(".pt-document-feedback").textContent=client.data.reading && client.data.reading!=='journal'?client.flashText:"";
     raf = requestAnimationFrame(frame);
   }
 
@@ -1960,6 +1965,26 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
   return cleanup;
 }
 
+function syncJournalList(container,items,keyOf,update,title='') {
+  const signature=JSON.stringify(items);
+  if(container.dataset.signature===signature) return;
+  const old=new Map([...container.children].filter(n=>n.dataset.entry).map(n=>[n.dataset.entry,n]));
+  // Remove only obsolete entries; leave focused, expanded controls in place.
+  const keys=new Set(items.map(keyOf));
+  for(const node of [...container.children]) {
+    if(!node.dataset.entry || !keys.has(node.dataset.entry)) node.remove();
+  }
+  if(title){const heading=document.createElement('h3');heading.textContent=title;container.prepend(heading);}
+  let previous=title?container.firstChild:null;
+  for(const item of items){
+    const key=keyOf(item),node=old.get(key)||document.createElement('article');
+    node.dataset.entry=key;update(node,item);
+    if(node.previousSibling!==previous || node.parentNode!==container) container.insertBefore(node,previous?previous.nextSibling:container.firstChild);
+    previous=node;
+  }
+  container.dataset.signature=signature;
+}
+
 function renderStoryPanels(parent,client) {
   const d=client.data,s=d.story;
   if(!s) return; // Old component protocol is still supported by regression tests.
@@ -1968,33 +1993,72 @@ function renderStoryPanels(parent,client) {
   panel.hidden=!reading;
   const confirm=['restart_confirm','confirm_crate','confirm_takeover','confirm_dinghy','confirm_castaway'].includes(reading);
   const doc=d.documents[reading];
+  panel.setAttribute('aria-label',doc?.title || 'Journal');
   panel.querySelector('.pt-document-kicker').textContent=doc?.kicker || 'YOUR DISCOVERIES';
   panel.querySelector('.pt-document-title').textContent=doc?.title || 'Journal';
   panel.querySelector('.pt-document-body').textContent=doc?.body || 'Notes from your journey. Only discoveries you have made appear here.';
   let hint=doc?.hint || '';
-  if(d.reading==='return_crate' || d.reading==='journal' && (s.inspected.includes('return_crate')||s.inspected.includes('manifest_desk'))) {
+  if(d.reading==='return_crate') {
     const check=(yes,text)=>(yes?'✓ ':'○ ')+text;
     hint=[check(s.crate_open,'Open crate 07 with the crowbar or pay the cook two coins'),d.dining_alive?'✓ The cook is alive':'× The cook is dead'].join('\n');
   }
-  panel.querySelector('.pt-document-hint').textContent=hint;
+  const hintNode=panel.querySelector('.pt-document-hint');
+  hintNode.textContent=hint;hintNode.hidden=!hint;
+  const isJournal=reading==='journal';
+  const guidance=panel.querySelector('.pt-journal-guidance');
+  guidance.hidden=!isJournal;
+  panel.querySelector('.pt-discoveries-heading').hidden=!isJournal;
   const entries=panel.querySelector('.pt-journal-entries');
-  entries.replaceChildren();
-  if(d.reading==='journal') {
-    for(const id of s.inspected) {
-      const known=d.documents[id];if(!known || d.rules.story_points[id]?.kind==='chest') continue;
-      const detail=document.createElement('details'), summary=document.createElement('summary'),p=document.createElement('p');
-      summary.textContent=known.title;p.textContent=known.body;
-      detail.append(summary,p);entries.append(detail);
+  entries.hidden=!isJournal;
+  // Keyed entries keep native details, keyboard focus and scroll position on
+  // routine server updates. Clearer hints never send a gameplay action.
+  if(isJournal) {
+    const hints=d.journal_hints||[];
+    syncJournalList(guidance,hints,h=>h.id,(node,h)=>{
+      if(!node.firstChild) {
+        node.className='pt-journal-card';
+        const heading=document.createElement('h4'),status=document.createElement('span'),
+          text=document.createElement('p'),detail=document.createElement('details'),
+          summary=document.createElement('summary'),clearer=document.createElement('p');
+        heading.className='pt-hint-title';status.className='pt-hint-status';
+        text.className='pt-hint-text';clearer.className='pt-hint-clearer';
+        summary.textContent='Show a clearer hint';
+        detail.append(summary,clearer);node.append(status,heading,text,detail);
+      }
+      node.querySelector('.pt-hint-title').textContent=h.title;
+      node.dataset.status=h.status;
+      node.querySelector('.pt-hint-status').textContent=h.status;
+      node.querySelector('.pt-hint-text').textContent=h.text;
+      node.querySelector('.pt-hint-clearer').textContent=h.clearer;
+    },'Possible next steps');
+    const discoveries=s.inspected.filter(id=>d.documents[id] && d.rules.story_points[id]?.kind!=='chest');
+    syncJournalList(entries,discoveries,id=>id,(node,id)=>{
+      if(!node.firstChild){const detail=document.createElement('details');detail.append(document.createElement('summary'),document.createElement('p'));node.append(detail);}
+      node.querySelector('summary').textContent=d.documents[id].title;
+      node.querySelector('p').textContent=d.documents[id].body;
+    });
+    if(!discoveries.length && !entries.firstChild){
+      const empty=document.createElement('p');empty.className='pt-journal-empty';
+      empty.textContent='No documents recorded yet. Inspect letters and logs with F; their words will stay here.';
+      entries.append(empty);
     }
-    if(!s.inspected.length) {
-      const p=document.createElement('p');p.textContent='No clues yet. Look for the letter by the bed in the cell.';entries.append(p);
-    }
+    panel.querySelector('.pt-document-body').textContent=d.multiplayer
+      ? 'Discoveries and equipment are shared with your crewmate. These suggestions also reflect your own disguise. The ship stays live while you read; check the situation before acting.'
+      : 'Follow a lead, or keep exploring. Clearer hints are yours to reveal.';
   }
+  panel.querySelector('.pt-document-actions span').textContent=d.multiplayer?'Ship is live · stay alert':'Game paused';
   const close=panel.querySelector('.pt-document-close');
+  close.disabled=Boolean(client.actionInFlight);
   close.textContent=reading==='restart_confirm'?'Keep playing · F':confirm?'Keep exploring · F':'Back to the ship · F';
   const yes=panel.querySelector('.pt-ending-confirm');
   yes.hidden=!confirm;yes.textContent=reading==='restart_confirm'?'Restart game':d.reading==='confirm_castaway'?'Swallow the pills':d.reading==='confirm_dinghy'?'Lower the dinghy':d.reading==='confirm_takeover'?'Take over the ship':'Climb in and escape';
-  if(reading) close.focus({preventScroll:true});
+  if(reading && reading!==client.previousDocument) close.focus({preventScroll:true});
+  if(!reading && client.previousDocument) {
+    const destination=parent.querySelector(client.documentOrigin==='journal'?'.pt-journal-button':'.pt-stage');
+    if(destination){destination.disabled=false;destination.focus({preventScroll:true});}
+    client.documentOrigin='stage';
+  }
+  client.previousDocument=reading;
   const storyInventory=parent.querySelector('.pt-story-inventory');
   storyInventory.replaceChildren();
   for(const id of s.items) {

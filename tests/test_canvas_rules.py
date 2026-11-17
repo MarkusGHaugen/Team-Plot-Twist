@@ -11,10 +11,19 @@ NODE=shutil.which('node')
 pytestmark=pytest.mark.skipif(NODE is None,reason='Node is needed to execute the actual Canvas rules')
 
 
+def require_node():
+    # Other test modules also call this helper directly, outside this module's
+    # skip marker. Keep their Python tests usable when Node is not installed.
+    if NODE is None:
+        pytest.skip('Node is needed to execute the actual Canvas rules')
+    return NODE
+
+
 def canvas(expression, payload):
+    node = require_node()
     source=Path('game_component/game.js').read_text().replace('export default function','function mount')
     script="const vm=require('vm');let v=JSON.parse(require('fs').readFileSync(0,'utf8'));let c={};vm.createContext(c);vm.runInContext(v.source,c);c.input=v.payload;console.log(JSON.stringify(vm.runInContext(v.expression,c)));"
-    result=subprocess.run([NODE,'-e',script],input=json.dumps({'source':source,'payload':payload,'expression':expression}),text=True,capture_output=True,check=True)
+    result=subprocess.run([node,'-e',script],input=json.dumps({'source':source,'payload':payload,'expression':expression}),text=True,capture_output=True,check=True)
     return json.loads(result.stdout)
 
 
