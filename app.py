@@ -54,10 +54,12 @@ def read_progress(player_id: str, browser_backup=None):
         return state
 
 
-def begin_play(state=None, epoch_ms=None):
+def begin_play(state=None, epoch_ms=None, show_intro=False):
     st.session_state.playing = True
     st.session_state.confirm_new = False
     st.session_state.run_id = uuid.uuid4().hex
+    if show_intro:
+        st.session_state.intro_run_id = st.session_state.run_id
     # In a room every player uses the room's clock, so the guards walk the
     # same routes for both.
     st.session_state.guard_started_ms = (epoch_ms if epoch_ms is not None else
@@ -360,7 +362,7 @@ def main():
         if saved is None:
             with closing(connect_db(DB_PATH)) as conn:
                 new_game(conn, player_id)
-            begin_play()
+            begin_play(show_intro=True)
         else:
             st.session_state.confirm_new = True
         st.rerun()
@@ -375,7 +377,7 @@ def main():
             if st.button("Confirm New Game", use_container_width=True):
                 with closing(connect_db(DB_PATH)) as conn:
                     new_game(conn, player_id)
-                begin_play()
+                begin_play(show_intro=True)
                 st.rerun()
         with no_col:
             if st.button("Cancel", use_container_width=True):
@@ -407,6 +409,7 @@ def main():
         "endings": ENDINGS,
         "roles": ROLES,
         "run_id": st.session_state.run_id,
+        "intro": st.session_state.get("intro_run_id") == st.session_state.run_id,
         "revision": BACKEND_REVISION,
         "position": asdict(saved.position),
         "has_key": saved.has_key,

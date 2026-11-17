@@ -133,6 +133,12 @@
   font-size: 13px; font-weight: 850; letter-spacing: .03em;
   pointer-events: none; text-align: center;
 }
+.pt-intro-ui { position:absolute; z-index:3; inset:0; pointer-events:none; }
+.pt-intro-caption { position:absolute; top:52px; left:14px; max-width:min(42%,430px); padding:9px 13px; border:1px solid rgba(240,205,140,.64); border-radius:7px; color:#fff3d5; background:rgba(14,25,31,.68); font:600 13px/1.4 Georgia,serif; text-align:left; text-shadow:0 1px 2px #000; }
+.pt-intro-caption:empty { display:none; }
+.pt-intro-actions { position:absolute; right:14px; bottom:14px; display:flex; flex:0 0 auto; gap:7px; pointer-events:auto; }
+.pt-intro-actions button { border:1px solid #e0c28c; border-radius:6px; padding:8px 11px; color:#fff0cd; background:rgba(28,43,43,.92); cursor:pointer; font:700 11px system-ui,sans-serif; }
+.pt-intro-actions button:hover { background:#526357; }
 .pt-alert { background: rgba(117,36,30,.92); border: 1px solid #f5a06e;
   box-shadow: 0 0 25px rgba(238,72,49,.4); animation: pt-pulse 1s ease-in-out infinite alternate; }
 .pt-cutscene { top: 48px; background: rgba(28,36,38,.94); border: 1px solid #f5d28c; }
@@ -201,6 +207,10 @@
   .pt-location, .pt-inventory { font-size: 10px; padding: 4px 8px; }
   .pt-stage { height: 430px; }
   .pt-prompt { bottom: 18px; white-space: normal; font-size: 12px; }
+  .pt-intro-caption { top:46px; left:9px; max-width:48%; padding:7px 9px; font-size:11px; }
+  .pt-intro-actions { right:9px; bottom:9px; }
+  .pt-intro-actions { margin-left:auto; }
+  .pt-intro-actions button { padding:7px 8px; font-size:10px; }
   .pt-ready { margin-left: 0; }
 }
 
