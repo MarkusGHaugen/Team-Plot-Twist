@@ -182,3 +182,12 @@ def public(state):
             'window_before': WINDOW_BEFORE_MS, 'window_after': WINDOW_AFTER_MS,
             'dodged': f.get('dodged', 0), 'hits': hits,
             'left': 0 if done else BALLS, 'lives_left': max(0, LIVES - hits)}
+
+
+def demo_state(now):
+    """A save that is already in the middle of the finale, for trying it out without playing to an ending."""
+    import json
+    ended = replace(L.initial_state(), has_key=True, door_open=True, reached_kitchen=True,
+                    position=L.Position('kitchen', 1200.), ending='castaway',
+                    story_state=json.dumps({'items': ['sleeping_pills'], 'voyage': {'watch_start': 0}}))
+    return start(ended, now).state

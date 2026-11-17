@@ -358,6 +358,13 @@ def main():
             new_clicked = st.button("New Game", use_container_width=True, type="primary")
         with continue_col:
             continue_clicked = st.button("Continue", use_container_width=True, disabled=saved is None)
+        with spacer:
+            # Local testing only: set TEAM_PLOT_TWIST_DEV=1. It never shows online.
+            if os.environ.get("TEAM_PLOT_TWIST_DEV") == "1" and st.button("Dev: jump to the cannon finale"):
+                with closing(connect_db(DB_PATH)) as conn:
+                    restore_game(conn, finale.demo_state(int(time.time() * 1000)), player_id)
+                begin_play()
+                st.rerun()
 
     if new_clicked:
         if saved is None:

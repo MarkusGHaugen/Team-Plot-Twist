@@ -302,6 +302,12 @@ def test_other_actions_stay_blocked_during_the_finale(tmp_path):
         assert not apply_action(c, 'journal', Position('kitchen', 1200.), 0., 'p', None, None, T0).accepted
 
 
+def test_demo_state_is_a_valid_save_already_in_the_finale():
+    s = finale.demo_state(T0)
+    assert state_from_backup(asdict(s)) is not None
+    assert fin(s)['status'] == 'active' and len(finale.public(s)['balls']) == 10
+
+
 # ---- multiplayer: one shared ship, so one shared finale -------------------------
 
 def test_finale_is_shared_in_a_room_and_every_save_stays_valid():

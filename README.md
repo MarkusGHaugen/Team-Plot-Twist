@@ -13,7 +13,7 @@ uv sync --locked
 uv run streamlit run app.py --server.port 8535
 ```
 
-Open **http://localhost:8535**. On a Mac you can also run `run-team.command`; on Windows run `run-team.bat` after installing uv.
+Open **http://localhost:8535**. To try the cannon finale straight away, start with `TEAM_PLOT_TWIST_DEV=1` (for example `TEAM_PLOT_TWIST_DEV=1 uv run streamlit run app.py --server.port 8535`); a **Dev: jump to the cannon finale** button then appears next to New Game. It never shows online. On a Mac you can also run `run-team.command`; on Windows run `run-team.bat` after installing uv.
 
 ```bash
 uv run pytest -q
