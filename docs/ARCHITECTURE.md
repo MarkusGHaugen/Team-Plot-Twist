@@ -11,3 +11,7 @@ Browser identity and backup are in `game_component/browser_identity.js` and `bro
 Audio assets are served from `static/music/` with static serving enabled in `.streamlit/config.toml`. They are not sent with every state update. A single music controller survives rerenders, switches between exploration and alert recordings, and pauses when the game is no longer active.
 
 Tests execute server rules and, when Node is installed, compare actual Canvas functions with Python. Install Node to run those parity checks locally. Read CONTRIBUTING before changing state formats or creating a release.
+
+## Cannon finale
+
+`finale.py` owns the rules of the last escape after an ending: it picks the ten-ball volley from a stored seed, judges the moves the page reports and records the result in `voyage.finale` in the save (validated in `voyage.valid` and `logic.state_from_backup`). `game.js` plays the volley (`finaleStep`, `drawFinale`, `drawRescue`) and keeps `FINALE` equal to the constants in `finale.py`; a test checks that. The actions are `finale_start`, `finale_report` and `finale_retry` in `db.apply_action`.

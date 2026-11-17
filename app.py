@@ -23,6 +23,7 @@ from logic import (GUARD_ROUTES, GUARD_SEGMENTS, MAP_CONFIG, Position, capture_p
                    state_from_backup, story_progress, game_now_ms, route_points)
 from action_transport import handle_action
 from content import DOCUMENTS, ENDINGS, ITEMS, ROLES, STORY_POINTS
+import finale
 import multiplayer as mp
 import shared_ship
 
@@ -52,6 +53,16 @@ def read_progress(player_id: str, browser_backup=None):
             apply_action(conn,'close_reading',state.position,0,player_id,now_ms=int(time.time()*1000))
             state=load_game(conn,player_id)
         return state
+
+
+def dev_tools_enabled() -> bool:
+    """Local testing only. Set TEAM_PLOT_TWIST_DEV=1 as an environment variable or as a Streamlit secret."""
+    if os.environ.get("TEAM_PLOT_TWIST_DEV") == "1":
+        return True
+    try:
+        return str(st.secrets.get("TEAM_PLOT_TWIST_DEV", "")) == "1"
+    except Exception:
+        return False
 
 
 def begin_play(state=None, epoch_ms=None, show_intro=False):
@@ -357,6 +368,13 @@ def main():
             new_clicked = st.button("New Game", use_container_width=True, type="primary")
         with continue_col:
             continue_clicked = st.button("Continue", use_container_width=True, disabled=saved is None)
+        with spacer:
+            # Local testing only: set TEAM_PLOT_TWIST_DEV=1. It never shows online.
+            if dev_tools_enabled() and st.button("Dev: jump to the cannon finale"):
+                with closing(connect_db(DB_PATH)) as conn:
+                    restore_game(conn, finale.demo_state(int(time.time() * 1000)), player_id)
+                begin_play()
+                st.rerun()
 
     if new_clicked:
         if saved is None:
@@ -407,6 +425,7 @@ def main():
         "story": progress,
         "documents": DOCUMENTS,
         "endings": ENDINGS,
+        "finale": finale.public(saved),
         "roles": ROLES,
         "run_id": st.session_state.run_id,
         "intro": st.session_state.get("intro_run_id") == st.session_state.run_id,

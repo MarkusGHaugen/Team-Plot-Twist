@@ -133,6 +133,8 @@
   font-size: 13px; font-weight: 850; letter-spacing: .03em;
   pointer-events: none; text-align: center;
 }
+.pt-finale-retry { position:absolute; z-index:4; left:50%; bottom:22%; transform:translateX(-50%); border:1px solid #e0c28c; border-radius:7px; padding:11px 20px; color:#fff0cd; background:rgba(122,36,30,.95); cursor:pointer; font:800 15px system-ui,sans-serif; box-shadow:0 0 22px rgba(238,72,49,.45); }
+.pt-finale-retry:hover { background:#9b2f27; }
 .pt-intro-ui { position:absolute; z-index:3; inset:0; pointer-events:none; }
 .pt-intro-caption { position:absolute; top:52px; left:14px; max-width:min(42%,430px); padding:9px 13px; border:1px solid rgba(240,205,140,.64); border-radius:7px; color:#fff3d5; background:rgba(14,25,31,.68); font:600 13px/1.4 Georgia,serif; text-align:left; text-shadow:0 1px 2px #000; }
 .pt-intro-caption:empty { display:none; }
