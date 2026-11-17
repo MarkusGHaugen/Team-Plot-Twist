@@ -56,11 +56,11 @@ function musicEngine() {
       const plop=ac.createOscillator(),pg=ac.createGain();plop.type='sine';plop.frequency.setValueAtTime(210,ac.currentTime);plop.frequency.exponentialRampToValueAtTime(65,ac.currentTime+.19);pg.gain.setValueAtTime(Math.max(.01,m.volume*.38),ac.currentTime);pg.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.2);plop.connect(pg);pg.connect(ac.destination);plop.start();plop.stop(ac.currentTime+.21);
     }catch(_){}
   };
-  m.touch=(data,introActive=false,introTime=0)=>{
+  m.touch=(data,introActive=false,introTime=0,finaleDark=false)=>{
     m.lastTouch=Date.now();const run=String(data.run_id??'');
     if(m.runId!==run){m.runId=run;m.error='';if(m.tracks)for(const audio of Object.values(m.tracks))audio.currentTime=0;}
     const tense=data.capture_phase==='active'||gameNow(data)<data.alert_until_ms||(data.story?.voyage?.armed&&(data.sleeper_alive||Object.keys(data.guard_routes||{}).some(k=>data[k+'_alive'])));
-    const mode=data.ending?'ending':introActive?(introTime>=15.3?'alert':'explore'):tense?'alert':'explore';
+    const mode=finaleDark?'alert':data.ending?'ending':introActive?(introTime>=15.3?'alert':'explore'):tense?'alert':'explore';
     if(mode!==m.mode){if(mode==='alert'&&m.tracks)m.tracks.alert.currentTime=0;m.mode=mode;}
     m.sync();
   };
@@ -1552,7 +1552,7 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
   introSkip.addEventListener('click',skipIntro);
   const music=musicEngine(),musicButton=parentElement.querySelector('.pt-music-button'),volume=parentElement.querySelector('.pt-music-volume');
   async function toggleMusic(){await music.toggle();stage.focus({preventScroll:true});}
-  function changeVolume(){music.volume=Number(volume.value);try{localStorage.setItem('team-pt-music-volume',String(music.volume));}catch(_){}const p=introProgress(client);music.touch(client.data,p!==null,p??0);}
+  function changeVolume(){music.volume=Number(volume.value);try{localStorage.setItem('team-pt-music-volume',String(music.volume));}catch(_){}const p=introProgress(client);music.touch(client.data,p!==null,p??0,finaleDarkNow(client.data));}
   musicButton.addEventListener('click',toggleMusic);volume.addEventListener('input',changeVolume);volume.value=music.volume;
   introMusicButton.addEventListener('click',toggleMusic);
   renderStoryPanels(parentElement,client);
@@ -1582,7 +1582,7 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
     setTriggerValue('action',{...payload,delivery:++client.delivery});
   }
   function action(kind, item = null) {
-    if(client.data.ending&&!['restart_game'].includes(kind)) return;
+    if(client.data.ending&&!['restart_game','finale_start','finale_report','finale_retry'].includes(kind)) return;
     if((kind==='restart_prompt'||kind==='journal'||kind==='story_inspect'&&!['chest','coins','helm'].includes(client.data.rules.story_points?.[item]?.kind)) && !client.actionInFlight) {
       client.readingPending=true;client.keys.clear();client.data.uiPauseAt=Date.now();
     }
@@ -1627,7 +1627,7 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
     if (k.startsWith("arrow") || k === " ") event.preventDefault();
     if(introProgress(client)!==null){if(k==='escape')skipIntro();return;}
     if(client.restartPrompt){if((k==='f'||k==='escape')&&!event.repeat)closeDocument();event.preventDefault();return;}
-    if(client.data.ending) { if(controlKey(k)) event.preventDefault();return; }
+    if(client.data.ending) { if(controlKey(k)) event.preventDefault();finaleKey(client,k,event.repeat,finaleRetry);return; }
     if(client.data.reading) {
       if(controlKey(k)) event.preventDefault();
       if((k==="f"||k==="escape") && !event.repeat) action("close_reading");
@@ -1717,6 +1717,9 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
   function confirmEnding(){if(client.data.reading==='restart_confirm'||client.restartPrompt){action('restart_game');return;} if(!client.actionInFlight) action("story_finish",client.data.reading==="confirm_castaway"?"cell_floor":client.data.reading==="confirm_dinghy"?"lifeboat":client.data.reading==="confirm_takeover"?"helm":"return_crate"); }
   function openJournal(){ if(!client.data.reading) action("journal"); }
   function replay(){ client.endingStartedAt=performance.now(); }
+  function finaleRetry(){ if(client.data.finale?.status==='lost'&&!client.actionInFlight) action('finale_retry'); }
+  const finaleRetryButton=parentElement.querySelector('.pt-finale-retry');
+  finaleRetryButton.addEventListener('click',finaleRetry);
   function trapDocumentFocus(event){
     if(event.key!=="Tab") return;
     const stops=[...documentPanel.querySelectorAll('button:not([hidden]),summary')].filter(el=>!el.disabled);
@@ -1745,7 +1748,7 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
     lastFrameAt = now;
     if(client.actionInFlight&&client.inFlightPayload&&now-client.lastDeliveryAt>1500)deliver(client.inFlightPayload);
     const introTime=introProgress(client,now);
-    music.touch(client.data,introTime!==null,introTime??0);
+    music.touch(client.data,introTime!==null,introTime??0,finaleDarkNow(client.data));
     if(introTime!==null&&introTime>=9.9&&!client.introSplashPlayed){client.introSplashPlayed=true;music.playSplash();}
     if(music.error&&music.error!==client.musicError){client.flashText=music.error;client.flashUntil=now+6000;}client.musicError=music.error;
     musicButton.textContent=music.enabled?'Music: on ♫':'Music: off ♫';musicButton.setAttribute?.('aria-pressed',String(music.enabled));
@@ -1810,6 +1813,14 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
       if(say&&client.feastStage!==undefined){client.flashText=say;client.flashUntil=now+4500;}
       client.feastStage=stage2;
     }
+    const fin=finaleStep(client,now);
+    if(client.data.ending&&client.data.ending!=='free'&&!client.data.finale&&!endingPreludeActive(client)&&now-client.endingStartedAt>=3000&&!client.actionInFlight&&now>=(client.nextFinaleStart||0)){
+      client.nextFinaleStart=now+2500;action('finale_start');
+    }
+    if(fin&&fin.over&&client.data.finale.status==='active'&&!client.actionInFlight&&now>=fin.nextReportAt&&fin.reports<6){
+      fin.nextReportAt=now+2000;fin.reports++;action('finale_report',JSON.stringify(fin.moves));
+    }
+    finaleRetryButton.hidden=client.data.finale?.status!=='lost';
     reportPosition();
     publishPosition(client,key,now);
     if(introTime!==null){
@@ -1818,12 +1829,12 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
       ctx.setTransform(dpr,0,0,dpr,0,0);drawIntroScene(ctx,w,h,introTime);
       introUi.hidden=false;const caption=introCaption(introTime);if(introText.textContent!==caption)introText.textContent=caption;
     }else{introUi.hidden=true;draw(client, canvas, stage, guards);}
-    endingPanel.hidden=!client.data.ending||endingPreludeActive(client);
+    endingPanel.hidden=!client.data.ending||endingPreludeActive(client)||finaleGate(client.data);
     parentElement.querySelector('.pt-game').classList.toggle('is-complete',Boolean(client.data.ending));
     fullscreenButton.textContent=document.fullscreenElement?'Exit fullscreen':'Fullscreen ⛶';
     parentElement.querySelector('.pt-ready').textContent=client.data.ending?'Journey complete':'Keyboard ready';
     location.textContent = ZONE_NAMES[client.position.zone] || "Ship";
-    parentElement.querySelector('.pt-stage-label').textContent=introTime!==null?'THE BEGINNING':client.data.ending?(endingPreludeActive(client)?cinematicLabel(client):'EPILOGUE · FREEDOM'):`PIRATE SHIP · ${(ZONE_NAMES[client.position.zone] || 'SHIP').toUpperCase()}${client.feastStage==='asleep'||client.feastStage==='dozing'?` · CREW ASLEEP ${Math.floor(feastSecondsLeft(client.data)/60)}:${String(feastSecondsLeft(client.data)%60).padStart(2,'0')}`:''}`;
+    parentElement.querySelector('.pt-stage-label').textContent=introTime!==null?'THE BEGINNING':client.data.ending?(client.data.finale&&client.data.finale.status!=='won'?'THE GUARDS ARE BACK':endingPreludeActive(client)?cinematicLabel(client):'EPILOGUE · FREEDOM'):`PIRATE SHIP · ${(ZONE_NAMES[client.position.zone] || 'SHIP').toUpperCase()}${client.feastStage==='asleep'||client.feastStage==='dozing'?` · CREW ASLEEP ${Math.floor(feastSecondsLeft(client.data)/60)}:${String(feastSecondsLeft(client.data)%60).padStart(2,'0')}`:''}`;
     inventory.classList.toggle("has-key", Boolean(client.data.has_key || client.data.has_blue_key || client.data.has_pistol || client.data.has_lamp));
     inventory.lastElementChild.textContent = [`🪙 ${client.data.story?.voyage?.coins||0}`,`♥ ${client.data.story?.voyage?.hp??2}`,client.data.has_key && "🗝️ Cell", client.data.has_blue_key && "🔵 Chest", client.data.has_pistol && "🔫 Pistol",client.data.has_lamp && "🏮 Lamp",client.data.story?.voyage?.captain_worn?"★ Captain":client.data.disguised && "🥼 Uniform"].filter(Boolean).join(" · ") || "Empty";
     inventoryPanel.hidden=!client.inventoryOpen || frozen;
@@ -1900,6 +1911,7 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
     introMusicButton.removeEventListener('click',toggleMusic);
     journalButton.removeEventListener("click",openJournal);
     replayScene.removeEventListener("click",replay);
+    finaleRetryButton.removeEventListener('click',finaleRetry);
     fullscreenButton.removeEventListener("click",toggleFullscreen);
     restartButton.removeEventListener('click',restartPrompt);musicButton.removeEventListener('click',toggleMusic);volume.removeEventListener('input',changeVolume);
     if (parentElement.__teamPlotTwistCleanup === cleanup) parentElement.__teamPlotTwistCleanup = null;
@@ -1950,7 +1962,7 @@ function renderStoryPanels(parent,client) {
     node.className='pt-story-item';node.textContent=item.icon+' '+item.name;
     use.textContent=item.use;node.append(use);storyInventory.append(node);
   }
-  const end=parent.querySelector('.pt-ending-panel');end.hidden=!d.ending || endingPreludeActive(client);
+  const end=parent.querySelector('.pt-ending-panel');end.hidden=!d.ending || endingPreludeActive(client) || finaleGate(d);
   if(d.ending) {
     const e=d.endings[d.ending];
     end.querySelector('.pt-ending-kicker').textContent=e.subtitle;
@@ -2136,10 +2148,12 @@ const CASTAWAY_SHORE_START = CASTAWAY_DRIFT_START + 4 * CASTAWAY_DAY_SECONDS;
 function endingPreludeActive(client) {
   const t=(performance.now()-client.endingStartedAt)/1000;
   const reduced=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(client.data.ending==='free')return !reduced&&t<RESCUE_SECONDS;
   return client.data.ending==='crate'?t<CRATE_NIGHT_SECONDS+16:!reduced&&t<(client.data.ending==='dinghy'?21:client.data.ending==='command'?24:client.data.ending==='castaway'?CASTAWAY_SECONDS:12);
 }
 function cinematicLabel(client) {
   const t=(performance.now()-client.endingStartedAt)/1000;
+  if(client.data.ending==='free')return t<4?'A SMALL BOAT AT LAST':'FREE AT LAST';
   if(client.data.ending==='castaway'){const m=castawayMotion(1000,560,t);return m.phase==='cell'?(m.found?'THE GUARDS FIND YOU':'THE COLD FLOOR OF THE CELL'):m.phase==='overboard'?'OVER THE SIDE':m.phase==='adrift'?`ADRIFT · DAY ${m.day} OF 4`:'AT THE WATER’S EDGE';}
   if(client.data.ending==='lullaby')return 'THE CREW SLEEPS · THE HELM IS YOURS';
   return client.data.ending==='command'?'A CAPTAIN BY DECEPTION · HEADING HOME':client.data.ending==='crate'?(t<CRATE_NIGHT_SECONDS?'NIGHTFALL · WAITING FOR DAWN':'DAWN · THE RETURN DELIVERY'):client.data.ending==='dinghy'?'LOWERING THE DINGHY · FREEDOM AWAITS':'THE HELM IS YOURS · SETTING SAIL';
@@ -2684,6 +2698,8 @@ function drawCastaway(ctx, w, h, t, client) {
   }
 }
 function drawEnding(ctx,w,h,client) {
+  if(client.data.finale&&client.data.finale.status!=='won'){drawFinale(ctx,w,h,client);return;}
+  if(client.data.ending==='free'){drawRescue(ctx,w,h,Math.min(RESCUE_SECONDS,Math.max(0,(performance.now()-client.endingStartedAt)/1000)));return;}
   const reduced=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches,elapsed=Math.max(0,(performance.now()-client.endingStartedAt)/1000);
   if(client.data.ending==='crate'&&elapsed<CRATE_NIGHT_SECONDS){drawCratePrelude(ctx,w,h,reduced?4:elapsed);return;}
   if(client.data.ending==='dinghy'){drawDinghyEscape(ctx,w,h,reduced?21:elapsed,client);return;}
@@ -2701,3 +2717,132 @@ function drawEnding(ctx,w,h,client) {
     ctx.restore();
   } else drawCrateDelivery(ctx,w,h,t);
 }
+
+// ---- Cannon finale ------------------------------------------------------------------------
+// After an ending the guards come back with cannons. The page plays the volley the server chose
+// and reports the player's moves; the server judges them. Keep these numbers equal to finale.py.
+const FINALE={balls:10,lives:3,endMs:37900,windowBefore:500,windowAfter:250};
+const FINALE_TRAVEL_MS=1500;
+const FINALE_MAX_MOVES=120;
+const RESCUE_SECONDS=9;
+function finaleBallResult(ball,moves){
+  const counter=ball.lane==='low'?'jump':'duck';
+  return moves.some(m=>m[1]===counter&&m[0]>=ball.at-FINALE.windowBefore&&m[0]<=ball.at+FINALE.windowAfter);
+}
+function finaleJudge(balls,moves){
+  let dodged=0;for(const b of balls)if(finaleBallResult(b,moves))dodged++;
+  return [dodged,balls.length-dodged];
+}
+function finaleDarkNow(data){return Boolean(data.ending&&data.finale&&data.finale.status!=='won');}
+function finaleStep(client,now){
+  const f=client.data.finale;
+  if(!f||f.status==='won'){client.fin=null;return null;}
+  const id=f.seed+':'+f.attempt;
+  if(!client.fin||client.fin.id!==id)client.fin={id,t0:now,t:0,moves:[],results:[],hits:0,left:FINALE.balls,lives:FINALE.lives,
+    over:false,reports:0,nextReportAt:0,jumpAt:-9999,duckAt:-9999,flashAt:-9999,seenHits:0,frozenT:null};
+  const fin=client.fin;
+  fin.t=fin.frozenT??Math.max(0,now-fin.t0);
+  fin.results=f.balls.map(b=>fin.t>b.at+FINALE.windowAfter?finaleBallResult(b,fin.moves):null);
+  fin.hits=fin.results.filter(r=>r===false).length;
+  fin.left=fin.results.filter(r=>r===null).length;
+  fin.lives=Math.max(0,FINALE.lives-fin.hits);
+  if(fin.hits>fin.seenHits){fin.seenHits=fin.hits;fin.flashAt=now;}
+  fin.down=fin.hits>=FINALE.lives;
+  fin.over=f.status==='lost'||fin.down||fin.t>=FINALE.endMs;
+  if(fin.over&&fin.frozenT==null)fin.frozenT=fin.t;
+  return fin;
+}
+// Returns true when the key belongs to the finale (so the normal ending ignores it).
+function finaleKey(client,k,repeat,retry){
+  const f=client.data.finale,fin=client.fin;
+  if(!f||f.status==='won')return false;
+  if(f.status==='lost'){if(k==='f'&&!repeat)retry();return true;}
+  if(!fin||fin.over||repeat)return true;
+  const kind=(k==='w'||k==='arrowup')?'jump':(k===' '||k==='s'||k==='arrowdown')?'duck':null;
+  const t=Math.round(performance.now()-fin.t0);
+  if(kind&&t>=0&&fin.moves.length<FINALE_MAX_MOVES){
+    fin.moves.push([t,kind]);
+    if(kind==='jump')fin.jumpAt=performance.now();else fin.duckAt=performance.now();
+  }
+  return true;
+}
+function finaleCannon(ctx,x,y,unit,flash){
+  ctx.save();ctx.translate(x,y);ctx.scale(unit,unit);
+  roundBox(ctx,-30,-9,60,18,6,'#2b2c31','#0f0f12');line(ctx,-24,-3,24,-3,'#555a63',3);
+  ctx.fillStyle='#4b3426';ctx.beginPath();ctx.arc(10,12,10,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#201710';ctx.lineWidth=3;ctx.stroke();
+  if(flash>0){ctx.globalAlpha=flash;ctx.fillStyle='#ffd27a';ctx.beginPath();ctx.arc(-38,0,16+10*flash,0,Math.PI*2);ctx.fill();ctx.fillStyle='rgba(180,180,180,.7)';ctx.beginPath();ctx.arc(-52,-8,10,0,Math.PI*2);ctx.arc(-60,-14,7,0,Math.PI*2);ctx.fill();}
+  ctx.restore();
+}
+function finaleBoat(ctx,x,y,unit,pirate){
+  ctx.save();ctx.translate(x,y);ctx.scale(unit,unit);
+  ctx.fillStyle='#4b2f25';ctx.strokeStyle='#1d130f';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(-90,-8);ctx.quadraticCurveTo(0,26,90,-8);ctx.lineTo(70,28);ctx.quadraticCurveTo(0,44,-70,28);ctx.closePath();ctx.fill();ctx.stroke();
+  line(ctx,-84,-4,84,-4,'#c99a62',4);
+  ctx.restore();
+  if(pirate)introPirate(ctx,x-18*unit,y-8*unit,unit*1.05);
+}
+function drawFinale(ctx,w,h,client){
+  const f=client.data.finale,fin=client.fin,now=performance.now(),t=fin?fin.t:0;
+  const unit=Math.min(w/900,h/500),seaY=h*.44,gy=h*.8,px=w*.2,ps=1.35*unit;
+  const lowY=gy-16*unit,highY=gy-78*unit,fireX=w*.76,slide=(1-clamp(t/1500,0,1))*w*.4;
+  const sky=ctx.createLinearGradient(0,0,0,seaY);sky.addColorStop(0,'#150f22');sky.addColorStop(1,'#8c3a2b');ctx.fillStyle=sky;ctx.fillRect(0,0,w,seaY);
+  ctx.fillStyle='#e8603a';ctx.globalAlpha=.55;ctx.beginPath();ctx.arc(w*.5,seaY,55*unit,Math.PI,0);ctx.fill();ctx.globalAlpha=1;
+  ctx.fillStyle='#14303a';ctx.fillRect(0,seaY,w,h-seaY);
+  for(let r=0;r<7;r++){const y=seaY+12+r*((h-seaY)/7);line(ctx,0,y+Math.sin(now/600+r)*3,w,y+Math.sin(now/600+r+1)*3,'rgba(240,150,110,.15)',2);}
+  // The player's raft.
+  ctx.fillStyle='#5b3d2a';ctx.fillRect(0,gy,w*.44,h-gy);line(ctx,0,gy,w*.44,gy,'#c99a62',5);
+  for(let x=0;x<w*.44;x+=46*unit)line(ctx,x,gy,x,h,'#3b271b',3);
+  // The guards: two stacked cannons on the nearest boat and more boats behind.
+  finaleBoat(ctx,w*.9+slide,seaY+14*unit,unit*1.4,true);finaleBoat(ctx,w*.62+slide*1.3,seaY+8*unit,unit*1.0,true);
+  roundBox(ctx,fireX+30*unit+slide,highY-18*unit,54*unit,(gy-highY)+22*unit,4,'#3d281e','#170f0b');
+  const fired=(fin&&f.balls||[]).map((b,i)=>({b,i,p:fin?(fin.t-(b.at-FINALE_TRAVEL_MS))/FINALE_TRAVEL_MS:-1}));
+  const flashFor=lane=>{let m=0;for(const o of fired)if(o.b.lane===lane&&o.p>=0&&o.p<.18)m=Math.max(m,1-o.p/.18);return m;};
+  finaleCannon(ctx,fireX+30*unit+slide,lowY,unit*1.1,flashFor('low'));finaleCannon(ctx,fireX+30*unit+slide,highY,unit*1.1,flashFor('high'));
+  // Balls and warnings.
+  const reduced=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+  for(const {b,i,p} of fired){
+    if(p<=0||p>1.5)continue;
+    const y=b.lane==='low'?lowY:highY,x=fireX+(px-fireX)*p,res=fin.results[i];
+    if(res===false&&p>1.02)continue;
+    if(p<1&&(p>.3||reduced)){const mx=px+70*unit;ctx.fillStyle='rgba(255,220,130,.9)';ctx.beginPath();ctx.moveTo(mx,y);ctx.lineTo(mx+14*unit,y-8*unit);ctx.lineTo(mx+14*unit,y+8*unit);ctx.closePath();ctx.fill();
+      ctx.textAlign='left';label(ctx,b.lane==='low'?'JUMP!':'DUCK!',mx+20*unit,y+5*unit,Math.max(12,15*unit));}
+    ctx.fillStyle='rgba(60,60,64,.35)';ctx.beginPath();ctx.arc(x+22*unit,y,8*unit,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#202227';ctx.beginPath();ctx.arc(x,y,10*unit,0,Math.PI*2);ctx.fill();ctx.fillStyle='rgba(255,255,255,.35)';ctx.beginPath();ctx.arc(x-3*unit,y-3*unit,3*unit,0,Math.PI*2);ctx.fill();
+  }
+  // The player: jump arc, duck squash, or knocked down after the third hit.
+  const jumpU=clamp((now-(fin?fin.jumpAt:-9999))/550,0,1),inJump=jumpU>0&&jumpU<1,duck=fin&&now-fin.duckAt<650&&!inJump;
+  ctx.save();ctx.translate(px,gy-(inJump?Math.sin(Math.PI*jumpU)*80*unit:0));
+  if(fin&&fin.down){ctx.rotate(-Math.PI/2);ctx.translate(0,-14*unit);}
+  else if(duck)ctx.scale(1,.55);
+  introPerson(ctx,0,0,ps,{scared:Boolean(fin&&fin.hits>0),seated:Boolean(duck)});ctx.restore();
+  if(fin&&now-fin.flashAt<420){ctx.fillStyle=`rgba(210,30,20,${.38*(1-(now-fin.flashAt)/420)})`;ctx.fillRect(0,0,w,h);}
+  // Heads-up display.
+  ctx.textAlign='left';label(ctx,`CANNONBALLS LEFT  ${fin?fin.left:FINALE.balls}`,16,h*.12,Math.max(14,18*unit));
+  for(let i=0;i<FINALE.lives;i++){ctx.font=`700 ${Math.max(18,24*unit)}px system-ui`;ctx.fillStyle=fin&&i>=fin.lives?'rgba(255,255,255,.22)':'#e0483b';ctx.fillText('♥',16+i*30*unit,h*.12+30*unit);}
+  ctx.textAlign='center';
+  if(t<2200&&f.status==='active'){ctx.fillStyle='rgba(0,0,0,.35)';ctx.fillRect(0,h*.2,w,h*.16);label(ctx,'THE GUARDS FOUND YOU!',w/2,h*.3,Math.max(22,34*unit));}
+  else if(f.status==='active'&&t>2200&&t<5500)label(ctx,'W / ↑ jump over low shots  ·  Space / S / ↓ duck under high ones',w/2,h*.2,Math.max(12,15*unit));
+  if(f.status==='lost'){ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(0,0,w,h);label(ctx,'CAUGHT!',w/2,h*.4,Math.max(30,50*unit));
+    label(ctx,'The guards drag you back to the ship…',w/2,h*.4+36*unit,Math.max(13,17*unit));}
+  else if(fin&&fin.down){label(ctx,'Hit!',w/2,h*.4,Math.max(26,40*unit));}
+  ctx.textAlign='left';
+}
+function drawRescue(ctx,w,h,t){
+  const unit=Math.min(w/900,h/500),seaY=h*.46,gy=h*.8,px=w*.2,ease=x=>x*x*(3-2*x),k=clamp(t/RESCUE_SECONDS,0,1);
+  const sky=ctx.createLinearGradient(0,0,0,seaY);sky.addColorStop(0,'#4a7f93');sky.addColorStop(1,'#f4b678');ctx.fillStyle=sky;ctx.fillRect(0,0,w,seaY);
+  ctx.fillStyle='#fbe2a6';ctx.beginPath();ctx.arc(w*.16,seaY-(10+k*30)*unit,46*unit,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#2f6f7e';ctx.fillRect(0,seaY,w,h-seaY);
+  for(let r=0;r<7;r++){const y=seaY+12+r*((h-seaY)/7);line(ctx,0,y+Math.sin(t*1.4+r)*3,w,y+Math.sin(t*1.4+r+1)*3,'rgba(245,230,180,.2)',2);}
+  ctx.save();ctx.globalAlpha=clamp(1-t/6,0,1);finaleBoat(ctx,w*.88+t*26*unit,seaY+10*unit,unit*.9,true);finaleBoat(ctx,w*.7+t*34*unit,seaY+6*unit,unit*.7,true);ctx.restore();
+  const arrive=ease(clamp(t/4,0,1)),leave=ease(clamp((t-5.4)/3.6,0,1)),boarded=t>=5.2;
+  const sx=(-w*.25+(px+120*unit+w*.25)*arrive)*(1-leave)+(-w*.1)*leave,sy=seaY+(h-seaY)*.28-leave*(h-seaY)*.2,ss=unit*.9*(1-.55*leave);
+  if(!boarded){ctx.fillStyle='#5b3d2a';ctx.fillRect(0,gy,w*.44,h-gy);line(ctx,0,gy,w*.44,gy,'#c99a62',5);}
+  const dog={x:70,y:-26,scale:.82,rotation:0,wet:false,fade:1,paddling:t};
+  introSkiff(ctx,sx,sy,ss,boarded?{reach:0,seated:true}:null,dog,t);
+  if(!boarded){
+    const u=clamp((t-4)/1.2,0,1),jx=px+(sx-46*ss-px)*u,jy=gy+(sy-26*ss-gy)*u-Math.sin(Math.PI*u)*60*unit;
+    introPerson(ctx,u>0?jx:px,u>0?jy:gy,1.35*unit*(1-.3*u));
+  }
+  if(t>3.2&&t<5.2&&Math.sin(t*14)>0)label(ctx,'Woof!',sx+70*ss,sy-80*ss,Math.max(14,20*unit));
+}
+// The normal ending panel waits until the cannon finale is won ("free"); older endings go through it too.
+function finaleGate(data){return Boolean(data.ending&&data.ending!=='free');}

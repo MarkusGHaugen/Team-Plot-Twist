@@ -23,6 +23,7 @@ from logic import (GUARD_ROUTES, GUARD_SEGMENTS, MAP_CONFIG, Position, capture_p
                    state_from_backup, story_progress, game_now_ms, route_points)
 from action_transport import handle_action
 from content import DOCUMENTS, ENDINGS, ITEMS, ROLES, STORY_POINTS
+import finale
 import multiplayer as mp
 import shared_ship
 
@@ -407,6 +408,7 @@ def main():
         "story": progress,
         "documents": DOCUMENTS,
         "endings": ENDINGS,
+        "finale": finale.public(saved),
         "roles": ROLES,
         "run_id": st.session_state.run_id,
         "intro": st.session_state.get("intro_run_id") == st.session_state.run_id,

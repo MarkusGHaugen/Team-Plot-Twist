@@ -36,14 +36,20 @@ def volley(seed):
              'at': FIRST_AT_MS + i * GAP_MS + rng.randint(-JITTER_MS, JITTER_MS)} for i in range(BALLS)]
 
 
-def judge(seed, moves):
-    """(dodged, hits). A low ball needs a jump and a high ball needs a duck, near its arrival time."""
-    dodged = 0
+def outcomes(seed, moves):
+    """For every ball in order: True if it was dodged. A low ball needs a jump and a high ball
+    needs a duck, within a short window around its arrival time."""
+    result = []
     for ball in volley(seed):
         counter = 'jump' if ball['lane'] == 'low' else 'duck'
         lo, hi = ball['at'] - WINDOW_BEFORE_MS, ball['at'] + WINDOW_AFTER_MS
-        if any(kind == counter and lo <= t <= hi for t, kind in moves):
-            dodged += 1
+        result.append(any(kind == counter and lo <= t <= hi for t, kind in moves))
+    return result
+
+
+def judge(seed, moves):
+    """(dodged, hits)."""
+    dodged = sum(outcomes(seed, moves))
     return dodged, BALLS - dodged
 
 
@@ -121,12 +127,17 @@ def report(state, moves, now):
     f = _record(state)
     if f is None or f['status'] != 'active':
         return _no(state, 'There is no cannon volley to finish.')
-    if int(now) - f['started'] < END_MS - EARLY_SLACK_MS:
-        return _no(state, 'The volley is not over yet.')
     clean = _clean_moves(moves)
     if clean is None:
         return _no(state, 'That report of your moves is not valid.')
-    dodged, hits = judge(f['seed'], clean)
+    results = outcomes(f['seed'], clean)
+    dodged = sum(results)
+    hits = BALLS - dodged
+    # The volley is over when the last ball has landed, or sooner once the third hit has.
+    misses = [i for i, ok in enumerate(results) if not ok]
+    over_at = volley(f['seed'])[misses[LIVES - 1]]['at'] + WINDOW_AFTER_MS if len(misses) >= LIVES else END_MS
+    if int(now) - f['started'] < over_at - EARLY_SLACK_MS:
+        return _no(state, 'The volley is not over yet.')
     if hits < LIVES:
         record = {**f, 'status': 'won', 'dodged': dodged, 'hits': hits}
         return L.ActionResult(_with_record(state, record, ending='free'), True, ENDINGS['free']['title'])
