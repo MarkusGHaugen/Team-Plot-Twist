@@ -1303,14 +1303,21 @@ function snapshot(position) {
 function introCaption(t) {
   if(t<7)return 'A peaceful morning. You sit and fish with your dog.';
   if(t<11)return 'A flash below the water—the dog spots a fish and leaps into the waves!';
-  if(t<15.3)return 'You dive in and swim after him, reaching through the waves.';
+  if(t<12)return 'Your dog splashes into the water. For a moment, you hesitate…';
+  if(t<15.3)return 'You spring from the boat and dive after him, reaching through the waves.';
   if(t<19.4)return 'Small pirate boats surround you and your dog. The pirates close in.';
   if(t<22.5)return '';
   if(t<29)return 'You wake in the cell, frightened and alone.';
   return 'The adventure begins.';
 }
 function introPerson(ctx,x,y,scale=1,{reach=0,bound=false,sack=false,scared=false,seated=false,color='#2d6b73'}={}) {
-  // Keep the cutscene figures close to the scale and proportions of sprites in the game.
+  // Reuse the game sprite for standing characters so caps, faces and uniforms match exactly.
+  if(!seated&&!bound&&!sack&&!scared){
+    const uniform=color==='#9c3d33';ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);
+    person(ctx,0,0,uniform,0,'none','right',false,false,'patrol',null,false);
+    if(reach){line(ctx,10,-39,24,-43,color,6);line(ctx,24,-43,36,-48,'#d0a173',5);}
+    ctx.restore();return;
+  }
   ctx.save();ctx.translate(x,y);ctx.scale(scale*.55,scale*.55);ctx.lineCap='round';
   ctx.strokeStyle='#302b29';ctx.lineWidth=11;if(seated){line(ctx,-10,-39,-19,-17,'#514238',11);line(ctx,-19,-17,8,-17,'#514238',11);line(ctx,10,-39,23,-18,'#514238',11);line(ctx,23,-18,42,-18,'#514238',11);}else{line(ctx,-10,-39,-17,-5,'#514238',11);line(ctx,10,-39,18,-5,'#514238',11);}
   roundBox(ctx,-22,-84,44,49,11,color,'#2c2927');
@@ -1367,8 +1374,8 @@ function introSkiff(ctx,x,y,scale,player,dog,t) {
 }
 function introPirate(ctx,x,y,scale=1) {
   introPerson(ctx,x,y,scale,{color:'#9c3d33'});
-  ctx.save();ctx.translate(x,y);ctx.scale(scale*.55,scale*.55);
-  line(ctx,12,-42,34,-76,'#d9e0e4',4);line(ctx,12,-42,19,-34,'#9a7948',5);line(ctx,34,-76,39,-84,'#fff0cb',2);ctx.restore();
+  ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);
+  line(ctx,12,-26,30,-54,'#d9e0e4',3);line(ctx,12,-26,20,-21,'#9a7948',4);line(ctx,30,-54,34,-61,'#fff0cb',2);ctx.restore();
 }
 function drawIntroCell(ctx,w,h,t,clamp01) {
   const fade=clamp01((t-21.3)/1.2);if(!fade)return;
@@ -1381,8 +1388,20 @@ function drawIntroCell(ctx,w,h,t,clamp01) {
   // A high barred porthole and brass-lit seams locate the brig beneath deck.
   ctx.fillStyle='#112e38';ctx.beginPath();ctx.arc(cx,h*.31,Math.min(48,w*.08),Math.PI,Math.PI*2);ctx.lineTo(cx+Math.min(48,w*.08),h*.36);ctx.lineTo(cx-Math.min(48,w*.08),h*.36);ctx.closePath();ctx.fill();
   for(let i=-2;i<=2;i++)line(ctx,cx+i*18,h*.26,cx+i*18,h*.39,'#aa9568',4);line(ctx,cx-50,h*.35,cx+50,h*.35,'#aa9568',4);
+  // Match the game's low bunk: green-gray mattress, wooden frame, legs and pillow.
+  const bedScale=doorW/240,bedX=left+16*bedScale,floorY=bottom-8,frameY=floorY-44*bedScale;
+  line(ctx,left+8,bottom-8,left+doorW-8,bottom-8,'#665744',5);
+  for(let i=0;i<5;i++)line(ctx,left+12+i*doorW*.2,bottom-5,left+12+i*doorW*.2,bottom-1,'#9a7950',2);
+  roundBox(ctx,bedX+7*bedScale,floorY-68*bedScale,104*bedScale,25*bedScale,4,'#6d8180','#38423c');
+  roundBox(ctx,bedX+12*bedScale,floorY-66*bedScale,24*bedScale,14*bedScale,5,'#ded2b5','#756f60');
+  roundBox(ctx,bedX,frameY,118*bedScale,12*bedScale,2,'#a57b51','#3a2a21');
+  line(ctx,bedX+4*bedScale,frameY+11*bedScale,bedX+4*bedScale,floorY,'#583b2c',5*bedScale);
+  line(ctx,bedX+112*bedScale,frameY+11*bedScale,bedX+112*bedScale,floorY,'#583b2c',5*bedScale);
+  // A folded clue peeks out from beneath the bunk, as it does in the playable cell.
+  ctx.save();ctx.translate(bedX+77*bedScale,floorY-3*bedScale);ctx.rotate(-.12);roundBox(ctx,-10*bedScale,-8*bedScale,20*bedScale,13*bedScale,1,'#ebd7a6','#705937');line(ctx,-6*bedScale,-4*bedScale,6*bedScale,-4*bedScale,'#8b7a55',.8*bedScale);ctx.restore();
   // The captive is left alone, still hooded and bound. No dog appears in the brig.
-  introPerson(ctx,cx,h*.78,Math.min(1.25,w/650),{scared:true,color:'#2d6b73'});
+  // Scale him so the top of his cap sits level with the mattress, as in the playable cell.
+  introPerson(ctx,left+doorW*.78,bottom-7,Math.min(1.85,w/420),{scared:true,color:'#2d6b73'});
   for(let i=0;i<7;i++)line(ctx,left+doorW*(i+.5)/7,top,left+doorW*(i+.5)/7,bottom,'#b29868',5);
   line(ctx,left,top,left,bottom,'#b29868',8);line(ctx,left+doorW,top,left+doorW,bottom,'#b29868',8);
   ctx.restore();
@@ -1390,21 +1409,31 @@ function drawIntroCell(ctx,w,h,t,clamp01) {
 function drawIntroScene(ctx,w,h,t) {
   const clamp01=x=>Math.max(0,Math.min(1,x));
   const mix=(a,b,f)=>Math.round(a+(b-a)*f);
-  const dawn=clamp01(t/7),cellFade=clamp01((t-21.3)/1.2),sea=h*.53;
+  const dawn=clamp01(t/7),pirateFog=clamp01((t-15.3)/.45),cellFade=clamp01((t-21.3)/1.2),sea=h*.53;
   const boatX=w*.44,boatY=sea-h*.035,unit=Math.min(w/900,h/500);
-  const jump=clamp01((t-8.7)/1.3),pirateReveal=clamp01((t-15.3)/1.8),zoom=t<8?1.55:t<10.5?1.55+.75*clamp01((t-8)/2.5):t<15.2?2.3-.32*clamp01((t-10.5)/4.7):t<17.7?1.98-1.03*clamp01((t-15.2)/2.5):t<19.4? .95:1;
+  const jump=clamp01((t-8.7)/1.3),pirateReveal=clamp01((t-15.3)/1.8),zoom=t<8?1.55:t<10.5?1.55+.75*clamp01((t-8)/2.5):t<15.2?2.3-.75*clamp01((t-10.5)/4.7):t<17.7?1.55-.6*clamp01((t-15.2)/2.5):t<19.4? .95:1;
   let focusX=boatX,focusY=boatY-h*.07;
   if(t>=8&&t<11.2){const f=clamp01((t-8)/.9);focusX=boatX+unit*(92+250*clamp01((t-8.7)/1.3))*f;focusY=sea+h*.02;}
-  else if(t>=11.2&&t<15.2){focusX=boatX+unit*330;focusY=sea+h*.02;}
-  else if(t>=15.2&&t<19.4){const reveal=clamp01((t-15.2)/2.5);focusX=boatX+unit*330+(w*.5-(boatX+unit*330))*reveal;focusY=sea+h*.02+(sea-h*.08-(sea+h*.02))*reveal;}
+  else if(t>=11.2&&t<15.2){focusX=boatX+unit*170;focusY=sea+h*.02;}
+  else if(t>=15.2&&t<19.4){const reveal=clamp01((t-15.2)/2.5),wideFocus=boatX+unit*170;focusX=wideFocus+(w*.5-wideFocus)*reveal;focusY=sea+h*.02+(sea-h*.08-(sea+h*.02))*reveal;}
   ctx.save();ctx.translate(w*.5,h*.5);ctx.scale(zoom,zoom);ctx.translate(-focusX,-focusY);
   const sky=ctx.createLinearGradient(0,0,0,h);
-  sky.addColorStop(0,`rgb(${mix(39,19,dawn)},${mix(79,42,dawn)},${mix(111,62,dawn)})`);
-  sky.addColorStop(.64,`rgb(${mix(218,150,dawn)},${mix(151,106,dawn)},${mix(114,86,dawn)})`);
+  const skyTop=[mix(mix(38,92,dawn),116,pirateFog),mix(mix(64,159,dawn),123,pirateFog),mix(mix(93,205,dawn),128,pirateFog)];
+  const skyHorizon=[mix(mix(173,255,dawn),166,pirateFog),mix(mix(116,211,dawn),168,pirateFog),mix(mix(94,148,dawn),163,pirateFog)];
+  sky.addColorStop(0,`rgb(${skyTop.join(',')})`);sky.addColorStop(.64,`rgb(${skyHorizon.join(',')})`);
   sky.addColorStop(1,'#173b4b');ctx.fillStyle=sky;ctx.fillRect(0,0,w,h);
-  ctx.fillStyle='#f4c67f';ctx.globalAlpha=.85;ctx.beginPath();ctx.arc(w*.78,h*.23,Math.min(28,w*.05),0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
-  const water=ctx.createLinearGradient(0,sea,0,h);water.addColorStop(0,'#287185');water.addColorStop(1,'#102f42');ctx.fillStyle=water;ctx.fillRect(0,sea,w,h-sea);
-  for(let i=0;i<12;i++){const yy=sea+12+i*i*2.1,xx=(i*97+performance.now()*.012)%(w+120)-60;line(ctx,xx,yy,xx+w*.13,yy,'rgba(230,222,188,.3)',2);}
+  const sunX=w*.78,sunY=h*(.545-.085*dawn),sunRadius=Math.min(25,w*.043);
+  ctx.globalAlpha=.88*(1-pirateFog);const sunGlow=ctx.createRadialGradient(sunX,sunY,sunRadius*.35,sunX,sunY,sunRadius*3.2);
+  sunGlow.addColorStop(0,'rgba(255,232,174,.48)');sunGlow.addColorStop(1,'rgba(255,205,120,0)');ctx.fillStyle=sunGlow;ctx.fillRect(sunX-sunRadius*3.2,sunY-sunRadius*3.2,sunRadius*6.4,sunRadius*6.4);
+  ctx.fillStyle='#ffe09a';ctx.beginPath();ctx.arc(sunX,sunY,sunRadius,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
+  const water=ctx.createLinearGradient(0,sea,0,h);
+  water.addColorStop(0,`rgb(${mix(40,125,pirateFog)},${mix(113,134,pirateFog)},${mix(133,139,pirateFog)})`);
+  water.addColorStop(1,`rgb(${mix(16,80,pirateFog)},${mix(47,91,pirateFog)},${mix(66,98,pirateFog)})`);ctx.fillStyle=water;ctx.fillRect(0,sea,w,h-sea);
+  for(let i=0;i<12;i++){const yy=sea+12+i*i*2.1,xx=(i*97+performance.now()*.012)%(w+120)-60;line(ctx,xx,yy,xx+w*.13,yy,`rgba(${mix(230,216,pirateFog)},${mix(222,219,pirateFog)},${mix(188,211,pirateFog)},.3)`,2);}
+  if(pirateFog>0){
+    const mist=ctx.createLinearGradient(0,sea-h*.2,0,sea+h*.12);mist.addColorStop(0,'rgba(204,208,205,0)');mist.addColorStop(.55,`rgba(207,210,205,${.42*pirateFog})`);mist.addColorStop(1,`rgba(184,192,191,${.18*pirateFog})`);
+    ctx.fillStyle=mist;ctx.fillRect(0,sea-h*.2,w,h*.32);
+  }
   if(pirateReveal>0){
     const positions=[[w*.14,.32],[w*.38,.29],[w*.62,.3],[w*.91,.33]];
     ctx.save();ctx.beginPath();ctx.rect(-w,-h,w*3,sea+h);ctx.clip();
@@ -1426,22 +1455,23 @@ function drawIntroScene(ctx,w,h,t) {
   const dogFade=1-clamp01((t-19.4)/.8);
   if(t<19.4){
     if(t<14.3){
-      introSkiff(ctx,boatX,boatY,unit,t<10.2?{reach:0,seated:true}:null,null,t);
+      introSkiff(ctx,boatX,boatY,unit,t<12?{reach:t>=11.65?1:0,seated:true}:null,null,t);
       // Let the water cover the submerged half of the hull and the character's legs.
       const surface=ctx.createLinearGradient(0,sea,0,h);surface.addColorStop(0,'#287185');surface.addColorStop(1,'#102f42');ctx.fillStyle=surface;ctx.fillRect(0,sea,w,h-sea);
       line(ctx,0,sea+2,w,sea+2,'rgba(230,222,188,.42)',2);
     }
-    if(t>=6.8&&t<10.4)introFish(ctx,boatX+150*unit,sea+h*.065+Math.sin(t*4)*4,unit*.7);
+    if(t>=6.8&&t<10.4)introFish(ctx,boatX+210*unit,sea+h*.025+Math.sin(t*4)*3,unit*.65);
     const dogStart=boatY-36*unit,dogWater=sea+h*.02,dy=dogStart+(dogWater-dogStart)*jump-Math.sin(Math.PI*jump)*h*.16+(t>=10?Math.sin(t*7)*2:0);
     const swim=clamp01((t-10)/.8),dx=boatX+unit*(48+310*jump+24*swim+Math.sin(t*3)*7*swim);
     if(t<8.7)introDog(ctx,boatX+48*unit,boatY-36*unit,unit*.82,0,{fade:1});
-    else if(t<19.4){introDog(ctx,dx,dy,unit*.82,jump<1?-.35*jump:.02*Math.sin(t*4),{wet:t>=10,fade:dogFade,paddling:t});
+    else if(t<19.4){const dogScale=jump<1?.82:.60;introDog(ctx,dx,dy,unit*dogScale,jump<1?-.35*jump:.02*Math.sin(t*4),{wet:t>=10,fade:dogFade,paddling:t});
       if(t>=9.9&&t<12.5){ctx.save();ctx.strokeStyle='rgba(230,245,237,.9)';ctx.lineWidth=3;for(let i=0;i<7;i++){ctx.beginPath();ctx.arc(dx+(i-3)*12,dy-8,6+i%2*5,Math.PI*1.1,Math.PI*1.9);ctx.stroke();}ctx.restore();}}
-    if(t>=10.2&&t<19.4){
-      const dive=clamp01((t-10.2)/1.35),diveEase=dive*dive*(3-2*dive),startX=boatX-46*unit;
+    if(t>=12&&t<19.4){
+      const dive=clamp01((t-12)/1.35),diveEase=dive*dive*(3-2*dive),startX=boatX-46*unit;
       const hx=startX+(boatX+unit*390-startX)*diveEase+Math.sin(t*2)*4*dive,hy=boatY-26*unit+(sea+h*.02-(boatY-26*unit))*diveEase-Math.sin(Math.PI*dive)*h*.16+(t>=11.55?Math.sin(t*5)*3:0);
       ctx.save();ctx.translate(hx,hy);ctx.rotate(Math.PI/2*diveEase);introPerson(ctx,0,0,unit,{reach:1,color:'#2d6b73'});ctx.restore();
-      if(t>=11.5){ctx.save();ctx.strokeStyle='rgba(230,245,237,.85)';ctx.lineWidth=3;for(let i=0;i<8;i++){ctx.beginPath();ctx.arc(hx+(i-4)*15,hy+Math.sin(t*3+i)*5,5+i%2*5,Math.PI*1.1,Math.PI*1.9);ctx.stroke();}ctx.restore();}
+      // Keep wake rings in the sea, only after the dive reaches the water.
+      if(dive>=1){const waveY=sea+7;ctx.save();ctx.strokeStyle='rgba(230,245,237,.82)';ctx.lineWidth=3;for(let i=0;i<8;i++){ctx.beginPath();ctx.arc(hx+(i-4)*15,waveY+Math.sin(t*3+i)*2,5+i%2*5,Math.PI*1.1,Math.PI*1.9);ctx.stroke();}ctx.restore();}
     }
   }
   ctx.restore();
