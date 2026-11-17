@@ -1836,14 +1836,14 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
       introUi.hidden=false;const caption=introCaption(introTime);if(introText.textContent!==caption)introText.textContent=caption;
     }else{introUi.hidden=true;draw(client, canvas, stage, guards);}
     endingPanel.hidden=!client.data.ending||endingPreludeActive(client)||finaleGate(client.data);
-    caughtPanel.hidden=client.data.finale?.status!=='lost';
+    caughtPanel.hidden=!finaleCaughtReady(client.data,client.fin);
     caughtRetry.disabled=client.actionInFlight;
     restartButton.hidden=Boolean(client.data.ending);
     parentElement.querySelector('.pt-game').classList.toggle('is-complete',Boolean(client.data.ending));
     fullscreenButton.textContent=document.fullscreenElement?'Exit fullscreen':'Fullscreen ⛶';
-    parentElement.querySelector('.pt-ready').textContent=client.data.finale?.status==='lost'?'Caught by the cannons':client.data.finale?.status==='active'?'Cannonball finale':client.data.ending?'Journey complete':'Keyboard ready';
+    parentElement.querySelector('.pt-ready').textContent=client.data.finale?.status==='lost'?(finaleCaughtReady(client.data,client.fin)?'Caught by the cannons':'The guards take you…'):client.data.finale?.status==='active'?'Cannonball finale':client.data.ending?'Journey complete':'Keyboard ready';
     location.textContent = ZONE_NAMES[client.position.zone] || "Ship";
-    parentElement.querySelector('.pt-stage-label').textContent=introTime!==null?'THE BEGINNING':client.data.ending?(client.data.finale?.status==='lost'?'CAUGHT BY THE CANNONS':client.data.finale?.status==='active'&&client.fin?.t<BEACH_CELEBRATION_MS?'THE BEACH · THE GUARDS RETURN':client.data.finale?.status==='active'?'THE GUARDS ARE BACK':endingPreludeActive(client)?cinematicLabel(client):'EPILOGUE · FREEDOM'):`PIRATE SHIP · ${(ZONE_NAMES[client.position.zone] || 'SHIP').toUpperCase()}${client.feastStage==='asleep'||client.feastStage==='dozing'?` · CREW ASLEEP ${Math.floor(feastSecondsLeft(client.data)/60)}:${String(feastSecondsLeft(client.data)%60).padStart(2,'0')}`:''}`;
+    parentElement.querySelector('.pt-stage-label').textContent=introTime!==null?'THE BEGINNING':client.data.ending?(client.data.finale?.status==='lost'?(finaleCaughtReady(client.data,client.fin)?'CAUGHT BY THE CANNONS':'THE GUARDS HAUL YOU ABOARD'):client.data.finale?.status==='active'&&client.fin?.t<BEACH_CELEBRATION_MS?'THE BEACH · THE GUARDS RETURN':client.data.finale?.status==='active'?'THE GUARDS ARE BACK':endingPreludeActive(client)?cinematicLabel(client):'EPILOGUE · FREEDOM'):`PIRATE SHIP · ${(ZONE_NAMES[client.position.zone] || 'SHIP').toUpperCase()}${client.feastStage==='asleep'||client.feastStage==='dozing'?` · CREW ASLEEP ${Math.floor(feastSecondsLeft(client.data)/60)}:${String(feastSecondsLeft(client.data)%60).padStart(2,'0')}`:''}`;
     inventory.classList.toggle("has-key", Boolean(client.data.has_key || client.data.has_blue_key || client.data.has_pistol || client.data.has_lamp));
     inventory.lastElementChild.textContent = [`🪙 ${client.data.story?.voyage?.coins||0}`,`♥ ${client.data.story?.voyage?.hp??2}`,client.data.has_key && "🗝️ Cell", client.data.has_blue_key && "🔵 Chest", client.data.has_pistol && "🔫 Pistol",client.data.has_lamp && "🏮 Lamp",client.data.story?.voyage?.captain_worn?"★ Captain":client.data.disguised && "🥼 Uniform"].filter(Boolean).join(" · ") || "Empty";
     inventoryPanel.hidden=!client.inventoryOpen || frozen;
@@ -2738,6 +2738,8 @@ const FINALE_MAX_MOVES=120;
 const RESCUE_SECONDS=9;
 const BEACH_CELEBRATION_MS=8500;
 const BEACH_MUSIC_SWITCH_MS=2600;
+const CAPTURE_SCENE_MS=6500;
+function finaleCaughtReady(data,fin){return Boolean(data.finale?.status==='lost'&&fin&&fin.captureT>=CAPTURE_SCENE_MS);}
 function finaleBallResult(ball,moves){
   const counter=ball.lane==='low'?'jump':'duck';
   return moves.some(m=>m[1]===counter&&m[0]>=ball.at-FINALE.windowBefore&&m[0]<=ball.at+FINALE.windowAfter);

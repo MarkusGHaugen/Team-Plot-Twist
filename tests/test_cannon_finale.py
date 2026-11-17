@@ -411,6 +411,13 @@ def test_beach_music_switches_from_celebration_to_the_guard_theme():
 
 
 @pytest.mark.skipif(NODE is None, reason='Node is needed to execute the actual Canvas rules')
+def test_caught_screen_waits_until_the_capture_scene_finishes():
+    data={'ending':'castaway','finale':{'status':'lost'}}
+    assert not canvas('finaleCaughtReady(input.data,input.fin)', {'data':data,'fin':{'captureT':6499}})
+    assert canvas('finaleCaughtReady(input.data,input.fin)', {'data':data,'fin':{'captureT':6500}})
+
+
+@pytest.mark.skipif(NODE is None, reason='Node is needed to execute the actual Canvas rules')
 def test_cannonball_inputs_wait_until_the_beach_scene_ends():
     data = {'ending': 'castaway', 'finale': {'status': 'active'}}
     client = {'data': data, 'fin': {'t': 1000, 'over': False, 'moves': []}}
@@ -425,7 +432,7 @@ def test_beach_twist_and_captured_return_scenes_render_without_errors():
       const ctx=new Proxy({}, {get:(_,key)=>key==='createLinearGradient'||key==='createRadialGradient'
         ?()=>({addColorStop:()=>{}}):()=>{}, set:()=>true});
       drawBeachTwist(ctx,900,500,input.t);
-      drawCapturedReturn(ctx,900,500,3500);
+      drawCapturedReturn(ctx,900,500,6500);
       return true;
     })()'''
     assert canvas(expression, {'t': 7000})

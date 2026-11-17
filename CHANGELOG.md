@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Mandatory cannon finale: after any of the six escape routes' original ending scenes, the beach celebration leads automatically into the cannon volley. Winning shows the rescue boat, dog and "Free at last" epilogue while preserving the reached ending. Three hits show "Caught by the cannons!" with a Try again button for a fresh volley; no loss resets the game automatically. New Game continues to require confirmation.
-- A local development shortcut jumps straight into the cannon finale in an isolated save. It leaves the player's regular save untouched and is hidden unless `TEAM_PLOT_TWIST_DEV=1`.
+- A local development shortcut plays an escape ending before the cannon finale in an isolated save. It leaves the player's regular save untouched and is hidden unless `TEAM_PLOT_TWIST_DEV=1`.
 - Validation: tests cover finale rules, save/restore, route preservation, multiplayer sharing, beach music and scene timing, retry behavior, and server/Canvas parity (`tests/test_cannon_finale.py`).
 - Multiplayer: one shared ship. What one player does happens for both (key, doors, items, coins, crew, alarms, the meal, the ending). A caught player is taken back to the locked cell and the crew search 30 seconds for the other, starting where they were last seen. Reading no longer pauses the game in multiplayer; Restart restarts the ship for both.
 - Multiplayer (beta): choose Single player or Multiplayer. Create a room and share its six-letter code; both players start in the cell and see each other move live through Ably. Each room has its own save. For now each player still has their own ship (doors, items and guards are not shared yet).

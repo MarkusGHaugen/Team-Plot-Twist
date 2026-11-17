@@ -377,8 +377,8 @@ def main():
             continue_clicked = st.button("Continue", use_container_width=True, disabled=saved is None)
         with spacer:
             # Local testing only: set TEAM_PLOT_TWIST_DEV=1. It never shows online.
-            if dev_tools_enabled() and st.button("Jump to cannon finale"):
-                demo_state = finale.demo_state(int(time.time() * 1000))
+            if dev_tools_enabled() and st.button("Play escape ending → plot twist"):
+                demo_state = finale.demo_escape_state()
                 demo_game_id = f"{player_id}-demo-{uuid.uuid4().hex}"
                 with closing(connect_db(DB_PATH)) as conn:
                     created = restore_game(conn, demo_state, demo_game_id)
