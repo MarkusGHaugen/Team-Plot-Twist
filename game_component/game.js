@@ -16,9 +16,9 @@ const ZONE_NAMES = {
 
 function musicEngine() {
   const previous=globalThis.__teamPlotTwistMusic;
-  if(previous?.version===2)return previous;
+  if(previous?.version===4)return previous;
   if(previous){previous.enabled=false;if(previous.timer)clearInterval(previous.timer);previous.ctx?.close?.();}
-  const m={version:2,enabled:false,volume:.22,mode:'explore',timer:null,lastTouch:0,runId:null,active:null,error:'',tracks:null};
+  const m={version:4,enabled:false,volume:.22,mode:'explore',timer:null,lastTouch:0,runId:null,active:null,error:'',tracks:null,sfxCtx:null};
   try {const saved=Number(localStorage.getItem('team-pt-music-volume')??.22);if(Number.isFinite(saved))m.volume=Math.max(0,Math.min(.6,saved));}catch(_){}
   m.ensureTracks=()=>{
     if(m.tracks)return;
@@ -43,17 +43,31 @@ function musicEngine() {
       });
     }
   };
-  m.touch=data=>{
+  m.ensureSfx=()=>{
+    try{const AudioContextClass=window.AudioContext||window.webkitAudioContext;if(!AudioContextClass)return null;m.sfxCtx||(m.sfxCtx=new AudioContextClass());if(m.sfxCtx.state==='suspended')m.sfxCtx.resume();return m.sfxCtx;}catch(_){return null;}
+  };
+  m.playSplash=()=>{
+    if(!m.enabled)return;
+    try{
+      const ac=m.ensureSfx();if(!ac)return;
+      const length=Math.floor(ac.sampleRate*.48),buffer=ac.createBuffer(1,length,ac.sampleRate),samples=buffer.getChannelData(0);
+      for(let i=0;i<length;i++){const fade=1-i/length;samples[i]=(Math.random()*2-1)*fade*fade;}
+      const noise=ac.createBufferSource(),filter=ac.createBiquadFilter(),gain=ac.createGain();noise.buffer=buffer;filter.type='lowpass';filter.frequency.setValueAtTime(1800,ac.currentTime);filter.frequency.exponentialRampToValueAtTime(260,ac.currentTime+.42);gain.gain.setValueAtTime(Math.max(.01,m.volume*.7),ac.currentTime);gain.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.46);noise.connect(filter);filter.connect(gain);gain.connect(ac.destination);noise.start();noise.stop(ac.currentTime+.48);
+      const plop=ac.createOscillator(),pg=ac.createGain();plop.type='sine';plop.frequency.setValueAtTime(210,ac.currentTime);plop.frequency.exponentialRampToValueAtTime(65,ac.currentTime+.19);pg.gain.setValueAtTime(Math.max(.01,m.volume*.38),ac.currentTime);pg.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.2);plop.connect(pg);pg.connect(ac.destination);plop.start();plop.stop(ac.currentTime+.21);
+    }catch(_){}
+  };
+  m.touch=(data,introActive=false,introTime=0)=>{
     m.lastTouch=Date.now();const run=String(data.run_id??'');
     if(m.runId!==run){m.runId=run;m.error='';if(m.tracks)for(const audio of Object.values(m.tracks))audio.currentTime=0;}
     const tense=data.capture_phase==='active'||gameNow(data)<data.alert_until_ms||(data.story?.voyage?.armed&&(data.sleeper_alive||Object.keys(data.guard_routes||{}).some(k=>data[k+'_alive'])));
-    const mode=data.ending?'ending':tense?'alert':'explore';
+    const mode=data.ending?'ending':introActive?(introTime>=15.3?'alert':'explore'):tense?'alert':'explore';
     if(mode!==m.mode){if(mode==='alert'&&m.tracks)m.tracks.alert.currentTime=0;m.mode=mode;}
     m.sync();
   };
   m.toggle=async()=>{
     m.ensureTracks();m.enabled=!m.enabled;m.error='';m.lastTouch=Date.now();
     if(m.enabled){
+      m.ensureSfx();
       for(const audio of Object.values(m.tracks))if(audio.error)audio.load();
       if(!m.timer)m.timer=setInterval(()=>{if(Date.now()-m.lastTouch>2000){m.enabled=false;m.stop();}else m.sync();},250);
       m.sync();
@@ -1286,6 +1300,160 @@ function controlKey(key) {
 function snapshot(position) {
   return { zone: position.zone, value: Math.round(position.value * 1000) / 1000 };
 }
+function introCaption(t) {
+  if(t<7)return 'A peaceful morning. You sit and fish with your dog.';
+  if(t<11)return 'A flash below the water—the dog spots a fish and leaps into the waves!';
+  if(t<15.3)return 'You dive in and swim after him, reaching through the waves.';
+  if(t<19.4)return 'Small pirate boats surround you and your dog. The pirates close in.';
+  if(t<22.5)return '';
+  if(t<29)return 'You wake in the cell, frightened and alone.';
+  return 'The adventure begins.';
+}
+function introPerson(ctx,x,y,scale=1,{reach=0,bound=false,sack=false,scared=false,seated=false,color='#2d6b73'}={}) {
+  // Keep the cutscene figures close to the scale and proportions of sprites in the game.
+  ctx.save();ctx.translate(x,y);ctx.scale(scale*.55,scale*.55);ctx.lineCap='round';
+  ctx.strokeStyle='#302b29';ctx.lineWidth=11;if(seated){line(ctx,-10,-39,-19,-17,'#514238',11);line(ctx,-19,-17,8,-17,'#514238',11);line(ctx,10,-39,23,-18,'#514238',11);line(ctx,23,-18,42,-18,'#514238',11);}else{line(ctx,-10,-39,-17,-5,'#514238',11);line(ctx,10,-39,18,-5,'#514238',11);}
+  roundBox(ctx,-24,-84,48,49,13,color,'#2c2927');
+  line(ctx,-23,-72,reach<0?-60:-38,-51,'#d19a71',10);
+  line(ctx,23,-72,reach>0?60:bound?31:43,-50,'#d19a71',10);
+  ctx.fillStyle='#cb9270';ctx.beginPath();ctx.arc(0,-103,22,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#263940';ctx.beginPath();ctx.arc(0,-111,23,Math.PI,Math.PI*2);ctx.lineTo(21,-103);ctx.lineTo(-20,-103);ctx.closePath();ctx.fill();line(ctx,-20,-101,20,-101,'#b5c9be',5);
+  ctx.fillStyle='#272322';ctx.beginPath();ctx.arc(-7,-103,scared?3:2,0,Math.PI*2);ctx.arc(7,-103,scared?3:2,0,Math.PI*2);ctx.fill();
+  line(ctx,-1,-98,3,-94,'#86563f',2);if(scared){ctx.fillStyle='#4d2525';ctx.beginPath();ctx.ellipse(0,-87,5,7,0,0,Math.PI*2);ctx.fill();}else line(ctx,-6,-88,6,-88,'#7b413b',2);
+  if(bound){line(ctx,-25,-53,25,-53,'#d7b77c',5);line(ctx,-12,-59,-18,-47,'#d7b77c',3);line(ctx,12,-59,18,-47,'#d7b77c',3);}
+  if(sack){
+    ctx.fillStyle='#b99b6c';ctx.strokeStyle='#574633';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-27,-112);ctx.quadraticCurveTo(-31,-139,0,-137);ctx.quadraticCurveTo(31,-139,27,-112);ctx.quadraticCurveTo(18,-91,0,-87);ctx.quadraticCurveTo(-20,-92,-27,-112);ctx.closePath();ctx.fill();ctx.stroke();
+    line(ctx,-19,-113,18,-113,'#6b543a',4);line(ctx,-3,-137,4,-146,'#b99b6c',6);
+  }
+  ctx.restore();
+}
+function introDog(ctx,x,y,scale=1,rotation=0,{wet=false,fade=1,paddling=0}={}) {
+  ctx.save();ctx.globalAlpha=fade;ctx.translate(x,y);ctx.rotate(rotation);ctx.scale(scale,scale);
+  ctx.fillStyle='#d8964d';ctx.strokeStyle='#623e2c';ctx.lineWidth=3;
+  ctx.beginPath();ctx.ellipse(0,-17,35,20,-.12,0,Math.PI*2);ctx.fill();ctx.stroke();
+  // A distinct chest, four legs, floppy ears, muzzle and nose make the dog readable at a glance.
+  ctx.fillStyle='#efc58e';ctx.beginPath();ctx.ellipse(22,-17,9,15,-.2,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#623e2c';ctx.fillStyle='#d8964d';ctx.beginPath();ctx.arc(29,-32,17,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.moveTo(18,-43);ctx.quadraticCurveTo(9,-61,25,-49);ctx.quadraticCurveTo(29,-42,25,-37);ctx.closePath();ctx.fillStyle='#74452f';ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.moveTo(33,-44);ctx.quadraticCurveTo(49,-57,45,-38);ctx.quadraticCurveTo(42,-34,37,-35);ctx.closePath();ctx.fillStyle='#8a5635';ctx.fill();ctx.stroke();
+  ctx.fillStyle='#dba76d';ctx.beginPath();ctx.ellipse(43,-26,14,9,-.08,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#25211e';ctx.beginPath();ctx.arc(35,-35,2.6,0,Math.PI*2);ctx.arc(55,-28,3.4,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#fff1d3';ctx.beginPath();ctx.arc(35.7,-35.8,.8,0,Math.PI*2);ctx.fill();
+  line(ctx,-27,-19,-43,-34,'#b66e3a',7);
+  const kick=Math.sin(paddling*8);line(ctx,-20,-4,-23,7+kick*5,'#74452f',6);line(ctx,4,-3,7,7-kick*5,'#74452f',6);line(ctx,18,-5,22,6+Math.sin(paddling*8+1)*5,'#74452f',6);line(ctx,31,-6,34,5-Math.sin(paddling*8+1)*5,'#74452f',6);
+  line(ctx,-3,-34,20,-31,'#b84037',5);ctx.fillStyle='#efc58e';ctx.beginPath();ctx.ellipse(8,-31,5,8,-.2,0,Math.PI*2);ctx.fill();
+  if(wet){ctx.fillStyle='rgba(198,231,231,.72)';ctx.beginPath();ctx.ellipse(2,-4,39,7,0,0,Math.PI*2);ctx.fill();}
+  ctx.restore();
+}
+function introFish(ctx,x,y,scale=1) {
+  ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);ctx.fillStyle='#e8b96d';ctx.strokeStyle='#704c35';ctx.lineWidth=2;
+  ctx.beginPath();ctx.ellipse(0,0,17,9,0,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.beginPath();ctx.moveTo(-15,0);ctx.lineTo(-27,-9);ctx.lineTo(-27,9);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.fillStyle='#25211e';ctx.beginPath();ctx.arc(10,-2,1.7,0,Math.PI*2);ctx.fill();
+  line(ctx,4,-7,4,7,'#a87845',1.5);ctx.restore();
+}
+function introSkiff(ctx,x,y,scale,player,dog,t) {
+  ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);
+  ctx.fillStyle='#724a32';ctx.strokeStyle='#392a23';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-176,-10);ctx.quadraticCurveTo(0,28,176,-10);ctx.lineTo(144,37);ctx.quadraticCurveTo(0,60,-144,37);ctx.closePath();ctx.fill();ctx.stroke();
+  line(ctx,-158,-7,158,-7,'#dfb77a',5);roundBox(ctx,-80,-29,160,18,4,'#a6784b','#4b3527');
+  // Fishing rod, line and bobber make the opening action readable at a glance.
+  line(ctx,-42,-26,-74,-119,'#553a2c',6);line(ctx,-74,-119,22,-7,'#ddcc9a',2);
+  ctx.fillStyle='#e65a46';ctx.beginPath();ctx.arc(22,-5,5,0,Math.PI*2);ctx.fill();
+  if(player)introPerson(ctx,-46,-26,1.12,{reach:player.reach,bound:player.bound,sack:player.sack,seated:player.seated});
+  if(dog)introDog(ctx,dog.x,dog.y,dog.scale,dog.rotation,{wet:dog.wet,fade:dog.fade,paddling:dog.paddling});
+  ctx.restore();
+}
+function introPirate(ctx,x,y,scale=1) {
+  introPerson(ctx,x,y,scale,{color:'#9c3d33'});
+  ctx.save();ctx.translate(x,y);ctx.scale(scale*.55,scale*.55);ctx.fillStyle='#302724';ctx.beginPath();ctx.moveTo(-29,-72);ctx.lineTo(0,-87);ctx.lineTo(30,-72);ctx.closePath();ctx.fill();line(ctx,-18,-70,20,-70,'#d4b878',4);
+  line(ctx,12,-42,34,-76,'#d9e0e4',4);line(ctx,12,-42,19,-34,'#9a7948',5);line(ctx,34,-76,39,-84,'#fff0cb',2);ctx.restore();
+}
+function drawIntroCell(ctx,w,h,t,clamp01) {
+  const fade=clamp01((t-21.3)/1.2);if(!fade)return;
+  ctx.save();ctx.globalAlpha=fade;ctx.fillStyle='#101c20';ctx.fillRect(0,0,w,h);
+  const wall=ctx.createLinearGradient(0,0,0,h);wall.addColorStop(0,'#344248');wall.addColorStop(1,'#191e20');ctx.fillStyle=wall;ctx.fillRect(0,0,w,h);
+  for(let y=34;y<h;y+=48)line(ctx,0,y,w,y,'#4f4b3e',3);
+  const cx=w*.52,doorW=Math.min(w*.64,470),left=cx-doorW/2,top=h*.16,bottom=h*.81;
+  ctx.fillStyle='#282b27';ctx.fillRect(left,top,doorW,bottom-top);
+  ctx.fillStyle='#403d33';ctx.fillRect(left+8,bottom-29,doorW-16,27);
+  // A high barred porthole and brass-lit seams locate the brig beneath deck.
+  ctx.fillStyle='#112e38';ctx.beginPath();ctx.arc(cx,h*.31,Math.min(48,w*.08),Math.PI,Math.PI*2);ctx.lineTo(cx+Math.min(48,w*.08),h*.36);ctx.lineTo(cx-Math.min(48,w*.08),h*.36);ctx.closePath();ctx.fill();
+  for(let i=-2;i<=2;i++)line(ctx,cx+i*18,h*.26,cx+i*18,h*.39,'#aa9568',4);line(ctx,cx-50,h*.35,cx+50,h*.35,'#aa9568',4);
+  // The captive is left alone, still hooded and bound. No dog appears in the brig.
+  introPerson(ctx,cx,h*.78,Math.min(1.25,w/650),{scared:true,color:'#2d6b73'});
+  for(let i=0;i<7;i++)line(ctx,left+doorW*(i+.5)/7,top,left+doorW*(i+.5)/7,bottom,'#b29868',5);
+  line(ctx,left,top,left,bottom,'#b29868',8);line(ctx,left+doorW,top,left+doorW,bottom,'#b29868',8);
+  ctx.restore();
+}
+function drawIntroScene(ctx,w,h,t) {
+  const clamp01=x=>Math.max(0,Math.min(1,x));
+  const mix=(a,b,f)=>Math.round(a+(b-a)*f);
+  const dawn=clamp01(t/7),cellFade=clamp01((t-21.3)/1.2),sea=h*.53;
+  const boatX=w*.44,boatY=sea-h*.035,unit=Math.min(w/900,h/500);
+  const jump=clamp01((t-8.7)/1.3),pirateReveal=clamp01((t-15.3)/1.8),zoom=t<8?1.55:t<10.5?1.55+.75*clamp01((t-8)/2.5):t<15.2?2.3-.32*clamp01((t-10.5)/4.7):t<17.7?1.98-1.03*clamp01((t-15.2)/2.5):t<19.4? .95:1;
+  let focusX=boatX,focusY=boatY-h*.07;
+  if(t>=8&&t<11.2){const f=clamp01((t-8)/.9);focusX=boatX+unit*(92+250*clamp01((t-8.7)/1.3))*f;focusY=sea+h*.02;}
+  else if(t>=11.2&&t<15.2){focusX=boatX+unit*330;focusY=sea+h*.02;}
+  else if(t>=15.2&&t<19.4){const reveal=clamp01((t-15.2)/2.5);focusX=boatX+unit*330+(w*.5-(boatX+unit*330))*reveal;focusY=sea+h*.02+(sea-h*.08-(sea+h*.02))*reveal;}
+  ctx.save();ctx.translate(w*.5,h*.5);ctx.scale(zoom,zoom);ctx.translate(-focusX,-focusY);
+  const sky=ctx.createLinearGradient(0,0,0,h);
+  sky.addColorStop(0,`rgb(${mix(39,19,dawn)},${mix(79,42,dawn)},${mix(111,62,dawn)})`);
+  sky.addColorStop(.64,`rgb(${mix(218,150,dawn)},${mix(151,106,dawn)},${mix(114,86,dawn)})`);
+  sky.addColorStop(1,'#173b4b');ctx.fillStyle=sky;ctx.fillRect(0,0,w,h);
+  ctx.fillStyle='#f4c67f';ctx.globalAlpha=.85;ctx.beginPath();ctx.arc(w*.78,h*.23,Math.min(28,w*.05),0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
+  const water=ctx.createLinearGradient(0,sea,0,h);water.addColorStop(0,'#287185');water.addColorStop(1,'#102f42');ctx.fillStyle=water;ctx.fillRect(0,sea,w,h-sea);
+  for(let i=0;i<12;i++){const yy=sea+12+i*i*2.1,xx=(i*97+performance.now()*.012)%(w+120)-60;line(ctx,xx,yy,xx+w*.13,yy,'rgba(230,222,188,.3)',2);}
+  if(pirateReveal>0){
+    const positions=[[w*.14,.32],[w*.38,.29],[w*.62,.3],[w*.91,.33]];
+    ctx.save();ctx.beginPath();ctx.rect(-w,-h,w*3,sea+h);ctx.clip();
+    positions.forEach(([sx,ss],i)=>{
+      const approach=clamp01((t-15.5-i*.2)/1.35),px=sx+(w*.5-sx)*approach*(i===3?.08:.25),boatScale=ss*unit*2.3,py=sea-boatScale*8+Math.sin(t*2+i)*1.5;
+      ctx.save();ctx.globalAlpha=pirateReveal;ctx.translate(px,py);ctx.scale(boatScale,boatScale);
+      ctx.fillStyle='#563c30';ctx.strokeStyle='#241e1c';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-125,-6);ctx.quadraticCurveTo(0,22,125,-6);ctx.lineTo(99,25);ctx.quadraticCurveTo(0,43,-99,25);ctx.closePath();ctx.fill();ctx.stroke();
+      ctx.fillStyle='#271f1d';ctx.beginPath();ctx.moveTo(-22,-5);ctx.lineTo(-20,-148);ctx.lineTo(0,-135);ctx.closePath();ctx.fill();ctx.beginPath();ctx.moveTo(23,-5);ctx.lineTo(20,-132);ctx.lineTo(48,-30);ctx.closePath();ctx.fill();
+      // One pirate stands on each deck, with a raised sword instead of mast-like stray lines.
+      introPirate(ctx,0,8,1.05);line(ctx,-19,-122,29,-94,'rgba(231,211,164,.7)',2);ctx.restore();
+    });
+    ctx.restore();
+  }
+  const dogFade=1-clamp01((t-19.4)/.8);
+  if(t<19.4){
+    if(t<14.3){
+      introSkiff(ctx,boatX,boatY,unit,t<11?{reach:t>=8?1:0,seated:t<8}:null,null,t);
+      // Let the water cover the submerged half of the hull and the character's legs.
+      const surface=ctx.createLinearGradient(0,sea,0,h);surface.addColorStop(0,'#287185');surface.addColorStop(1,'#102f42');ctx.fillStyle=surface;ctx.fillRect(0,sea,w,h-sea);
+      line(ctx,0,sea+2,w,sea+2,'rgba(230,222,188,.42)',2);
+    }
+    if(t>=6.8&&t<10.4)introFish(ctx,boatX+150*unit,sea+h*.065+Math.sin(t*4)*4,unit*.7);
+    const dogStart=boatY-42*unit,dogWater=sea+h*.02,dy=dogStart+(dogWater-dogStart)*jump-Math.sin(Math.PI*jump)*h*.055+(t>=10?Math.sin(t*7)*2:0);
+    const swim=clamp01((t-10)/.8),dx=boatX+unit*(92+250*jump+24*swim+Math.sin(t*3)*7*swim);
+    if(t<8.7)introDog(ctx,boatX+92*unit,boatY-42*unit,unit*.82,Math.sin(t*4)*.04,{fade:1});
+    else if(t<19.4){introDog(ctx,dx,dy,unit*.82,jump<1?-.2*jump:.02*Math.sin(t*4),{wet:t>=10,fade:dogFade,paddling:t});
+      if(t>=9.9&&t<12.5){ctx.save();ctx.strokeStyle='rgba(230,245,237,.9)';ctx.lineWidth=3;for(let i=0;i<7;i++){ctx.beginPath();ctx.arc(dx+(i-3)*12,dy-8,6+i%2*5,Math.PI*1.1,Math.PI*1.9);ctx.stroke();}ctx.restore();}}
+    if(t>=11&&t<19.4){
+      const hx=boatX+unit*(390+Math.sin(t*2)*8),hy=sea+h*.02+Math.sin(t*5)*3;
+      ctx.save();ctx.translate(hx,hy);ctx.rotate(Math.PI/2);introPerson(ctx,0,0,unit,{reach:1,color:'#2d6b73'});ctx.restore();
+      ctx.save();ctx.strokeStyle='rgba(230,245,237,.85)';ctx.lineWidth=3;for(let i=0;i<8;i++){ctx.beginPath();ctx.arc(hx+(i-4)*15,hy+Math.sin(t*3+i)*5,5+i%2*5,Math.PI*1.1,Math.PI*1.9);ctx.stroke();}ctx.restore();
+    }
+  }
+  ctx.restore();
+  if(cellFade>0)drawIntroCell(ctx,w,h,t,clamp01);
+  if(t>=19.4&&t<22.5){
+    const darkness=t<20.4?clamp01((t-19.4)/1):t<21.3?1:1-clamp01((t-21.3)/1.2);ctx.fillStyle=`rgba(0,0,0,${darkness})`;ctx.fillRect(0,0,w,h);
+  }
+  if(t>=28.6){
+    ctx.save();ctx.globalAlpha=clamp01((t-28.6)/.8);ctx.fillStyle='rgba(5,12,16,.4)';ctx.fillRect(0,0,w,h);
+    ctx.textAlign='center';ctx.fillStyle='#f2cd84';ctx.font=`800 ${Math.max(12,Math.min(16,w*.017))}px system-ui`;
+    ctx.fillText('TEAM PLOT TWIST',w/2,h*.22);ctx.fillStyle='#fff4dc';ctx.font=`bold ${Math.max(22,Math.min(36,w*.038))}px Georgia`;
+    ctx.fillText('Escape from the pirate ship',w/2,h*.31);ctx.restore();
+  }
+}
+function introProgress(client,now=performance.now()) {
+  if(client.introStartedAt==null)return null;
+  const elapsed=(now-client.introStartedAt)/1000;
+  if(elapsed>=30){client.introPausedMs+=now-client.introStartedAt;client.introStartedAt=null;return null;}
+  return elapsed;
+}
 
 export default function ({ data, parentElement, key, setTriggerValue, setStateValue }) {
   // A Streamlit rerun updates `data`; it must not pull a moving player back to
@@ -1293,7 +1461,13 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
   const runId = String(data.run_id ?? "") + ":" + String(data.revision ?? "");
   let client = clients.get(key);
   if (!client || client.runId !== runId) {
-    client = {
+    let introStartedAt=null;
+    if(data.intro){
+      let seen=false;
+      try{const seenKey=`team-pt-intro-${data.run_id}`;seen=sessionStorage.getItem(seenKey)==='seen';if(!seen)sessionStorage.setItem(seenKey,'seen');}catch(_){}
+      if(!seen)introStartedAt=performance.now();
+    }
+  client = {
       runId, position: { zone: data.position.zone, value: Number(data.position.value) },
       keys: new Set(), lastSent: snapshot(data.position), lastReportAt: performance.now(),
       lastFeedbackSeq: data.feedback?.seq ?? 0, flashText: "", flashUntil: 0,
@@ -1302,6 +1476,7 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
       requestPrefix:globalThis.crypto?.randomUUID?.()||String(Math.random()),nextRequest:0,delivery:0,inFlightPayload:null,lastDeliveryAt:0,
       alertPending:false, nextAlertAttempt:0, actionInFlight:false, pendingActions:[],
       suspectPending:false, nextSuspectAttempt:0, readingPending:false, endingStartedAt:performance.now(),
+      introStartedAt,introPausedMs:0,introSplashPlayed:false,
     };
     clients.set(key, client);
   }
@@ -1309,6 +1484,7 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
   data.parsedAlertResume=JSON.parse(data.alert_resume || "{}");
   client.wasEscorted=Boolean(client.data?.story?.voyage?.escort);
   client.data = data;
+  client.data.guard_started_ms=Number(data.guard_started_ms||0)+client.introPausedMs;
   client.key = key;
   syncMultiplayer(client,data,key,setTriggerValue);
   if (data.feedback?.seq !== client.lastFeedbackSeq) {
@@ -1359,6 +1535,7 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
   const journalButton=parentElement.querySelector(".pt-journal-button");
   const endingPanel=parentElement.querySelector(".pt-ending-panel");
   const replayScene=parentElement.querySelector(".pt-replay-scene");
+  const introUi=parentElement.querySelector('.pt-intro-ui'),introText=parentElement.querySelector('.pt-intro-caption'),introSkip=parentElement.querySelector('.pt-intro-skip'),introMusicButton=parentElement.querySelector('.pt-intro-music');
   const fullscreenButton=parentElement.querySelector('.pt-fullscreen-button');
   async function toggleFullscreen(){
     try {
@@ -1371,10 +1548,13 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
   const restartButton=parentElement.querySelector('.pt-restart-button');
   function restartPrompt(){if(client.data.ending){client.restartPrompt=true;renderStoryPanels(parentElement,client);}else action('restart_prompt');}
   restartButton.addEventListener('click',restartPrompt);
+  function skipIntro(){if(client.introStartedAt!=null){client.introPausedMs+=performance.now()-client.introStartedAt;client.introStartedAt=null;}client.keys.clear();}
+  introSkip.addEventListener('click',skipIntro);
   const music=musicEngine(),musicButton=parentElement.querySelector('.pt-music-button'),volume=parentElement.querySelector('.pt-music-volume');
   async function toggleMusic(){await music.toggle();stage.focus({preventScroll:true});}
-  function changeVolume(){music.volume=Number(volume.value);try{localStorage.setItem('team-pt-music-volume',String(music.volume));}catch(_){}music.touch(client.data);}
+  function changeVolume(){music.volume=Number(volume.value);try{localStorage.setItem('team-pt-music-volume',String(music.volume));}catch(_){}const p=introProgress(client);music.touch(client.data,p!==null,p??0);}
   musicButton.addEventListener('click',toggleMusic);volume.addEventListener('input',changeVolume);volume.value=music.volume;
+  introMusicButton.addEventListener('click',toggleMusic);
   renderStoryPanels(parentElement,client);
 
   let raf = 0, lastFrameAt = performance.now(), lastPrompt = null;
@@ -1445,6 +1625,7 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
     const k = event.key.toLowerCase();
     if (!controlKey(k)) return;
     if (k.startsWith("arrow") || k === " ") event.preventDefault();
+    if(introProgress(client)!==null){if(k==='escape')skipIntro();return;}
     if(client.restartPrompt){if((k==='f'||k==='escape')&&!event.repeat)closeDocument();event.preventDefault();return;}
     if(client.data.ending) { if(controlKey(k)) event.preventDefault();return; }
     if(client.data.reading) {
@@ -1563,12 +1744,15 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
     const dt = clamp((now - lastFrameAt) / 1000, 0, .05);
     lastFrameAt = now;
     if(client.actionInFlight&&client.inFlightPayload&&now-client.lastDeliveryAt>1500)deliver(client.inFlightPayload);
-    music.touch(client.data);
+    const introTime=introProgress(client,now);
+    music.touch(client.data,introTime!==null,introTime??0);
+    if(introTime!==null&&introTime>=9.9&&!client.introSplashPlayed){client.introSplashPlayed=true;music.playSplash();}
     if(music.error&&music.error!==client.musicError){client.flashText=music.error;client.flashUntil=now+6000;}client.musicError=music.error;
     musicButton.textContent=music.enabled?'Music: on ♫':'Music: off ♫';musicButton.setAttribute?.('aria-pressed',String(music.enabled));
+    introMusicButton.textContent=music.enabled?'Sound: on ♫':'Sound: off ♫';introMusicButton.setAttribute('aria-pressed',String(music.enabled));
     const e=client.data.story?.voyage?.escort;
     if(e&&!client.data.reading){const p=guidePosition(e,gameNow(client.data)),before=positionXY(client.position,client.data.rules);client.position=positionAtXY(p,client.data.rules);if(Math.abs(p.x-before.x)>.01)client.facing=p.x>before.x?'right':'left';}
-    const frozen=Boolean(client.data.ending || client.data.reading || client.readingPending);
+    const frozen=Boolean(introTime!==null || client.data.ending || client.data.reading || client.readingPending);
     if(!frozen && !client.actionInFlight && now>=(client.nextVoyageTick||0) && client.data.capture_phase==='none' && crewTickNeeded(client.data,client.position)) {
       client.nextVoyageTick=now+(client.data.story?.voyage?.armed||client.data.story?.voyage?.escort?250:1000);action('voyage_tick');
     }
@@ -1628,13 +1812,18 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
     }
     reportPosition();
     publishPosition(client,key,now);
-    draw(client, canvas, stage, guards);
+    if(introTime!==null){
+      const ctx=canvas.getContext('2d'),dpr=window.devicePixelRatio||1,w=Math.max(320,stage.clientWidth),h=stage.clientHeight;
+      if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr);}
+      ctx.setTransform(dpr,0,0,dpr,0,0);drawIntroScene(ctx,w,h,introTime);
+      introUi.hidden=false;const caption=introCaption(introTime);if(introText.textContent!==caption)introText.textContent=caption;
+    }else{introUi.hidden=true;draw(client, canvas, stage, guards);}
     endingPanel.hidden=!client.data.ending||endingPreludeActive(client);
     parentElement.querySelector('.pt-game').classList.toggle('is-complete',Boolean(client.data.ending));
     fullscreenButton.textContent=document.fullscreenElement?'Exit fullscreen':'Fullscreen ⛶';
     parentElement.querySelector('.pt-ready').textContent=client.data.ending?'Journey complete':'Keyboard ready';
     location.textContent = ZONE_NAMES[client.position.zone] || "Ship";
-    parentElement.querySelector('.pt-stage-label').textContent=client.data.ending?(endingPreludeActive(client)?cinematicLabel(client):'EPILOGUE · FREEDOM'):`PIRATE SHIP · ${(ZONE_NAMES[client.position.zone] || 'SHIP').toUpperCase()}${client.feastStage==='asleep'||client.feastStage==='dozing'?` · CREW ASLEEP ${Math.floor(feastSecondsLeft(client.data)/60)}:${String(feastSecondsLeft(client.data)%60).padStart(2,'0')}`:''}`;
+    parentElement.querySelector('.pt-stage-label').textContent=introTime!==null?'THE BEGINNING':client.data.ending?(endingPreludeActive(client)?cinematicLabel(client):'EPILOGUE · FREEDOM'):`PIRATE SHIP · ${(ZONE_NAMES[client.position.zone] || 'SHIP').toUpperCase()}${client.feastStage==='asleep'||client.feastStage==='dozing'?` · CREW ASLEEP ${Math.floor(feastSecondsLeft(client.data)/60)}:${String(feastSecondsLeft(client.data)%60).padStart(2,'0')}`:''}`;
     inventory.classList.toggle("has-key", Boolean(client.data.has_key || client.data.has_blue_key || client.data.has_pistol || client.data.has_lamp));
     inventory.lastElementChild.textContent = [`🪙 ${client.data.story?.voyage?.coins||0}`,`♥ ${client.data.story?.voyage?.hp??2}`,client.data.has_key && "🗝️ Cell", client.data.has_blue_key && "🔵 Chest", client.data.has_pistol && "🔫 Pistol",client.data.has_lamp && "🏮 Lamp",client.data.story?.voyage?.captain_worn?"★ Captain":client.data.disguised && "🥼 Uniform"].filter(Boolean).join(" · ") || "Empty";
     inventoryPanel.hidden=!client.inventoryOpen || frozen;
@@ -1707,6 +1896,8 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
     documentPanel.removeEventListener("keydown",trapDocumentFocus);
     documentClose.removeEventListener("click",closeDocument);
     endingConfirm.removeEventListener("click",confirmEnding);
+    introSkip.removeEventListener('click',skipIntro);
+    introMusicButton.removeEventListener('click',toggleMusic);
     journalButton.removeEventListener("click",openJournal);
     replayScene.removeEventListener("click",replay);
     fullscreenButton.removeEventListener("click",toggleFullscreen);
