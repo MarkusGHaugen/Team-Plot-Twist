@@ -187,10 +187,10 @@ def test_sleeping_pill_endings_persist(tmp_path, legacy, ending):
             assert load_game(conn, 'other-player') == initial_state()
 
 
-def test_endings_are_numbered_out_of_seven():
-    # Intentional change: the cannon finale added a seventh ending, "Free at last" (was: six endings).
+def test_endings_are_numbered_out_of_six():
+    # The mandatory cannon finale is the last scene of each route, not a new ending.
     from content import ENDINGS
-    assert len(ENDINGS) == 7 and all(e['subtitle'].split(' · ')[0].endswith('of 7') for e in ENDINGS.values())
+    assert len(ENDINGS) == 6 and all(e['subtitle'].split(' · ')[0].endswith('of 6') for e in ENDINGS.values())
 
 
 @pytest.mark.skipif(NODE is None, reason='Node runs the Canvas rules')

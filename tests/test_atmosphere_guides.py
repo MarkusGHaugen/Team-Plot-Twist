@@ -21,7 +21,7 @@ def test_restart_requires_confirmation_and_only_resets_own_save(tmp_path):
   assert apply_action(c,'close_reading',s.position,0,'a',now_ms=1500).accepted
   assert load_game(c,'a').has_key
   assert apply_action(c,'restart_prompt',s.position,0,'a',now_ms=1600).accepted
-  assert apply_action(c,'restart_game',s.position,0,'a',now_ms=1700).accepted
+  assert apply_action(c,'restart_game',s.position,0,'a',item='confirmed',now_ms=1700).accepted
   assert load_game(c,'a')==initial_state() and load_game(c,'b')==s
 
 
@@ -80,9 +80,10 @@ def test_completed_game_restart_prompt_leaves_victory_immutable(tmp_path):
  s=free(position=Position('aft_deck',1660),story_state=json.dumps({'items':['sail','rope']}),ending='dinghy')
  with connect_db(tmp_path/'complete.sqlite3') as c:
   restore_game(c,s,'a');before=c.total_changes
-  assert apply_action(c,'restart_prompt',s.position,0,'a',now_ms=1000).accepted
+  assert not apply_action(c,'restart_prompt',s.position,0,'a',now_ms=1000).accepted
   assert load_game(c,'a')==s and c.total_changes==before
-  assert apply_action(c,'restart_game',s.position,0,'a',now_ms=1500).state==initial_state()
+  assert not apply_action(c,'restart_game',s.position,0,'a',item='confirmed',now_ms=1500).accepted
+  assert load_game(c,'a')==s
 
 
 def test_guide_save_rejects_incomplete_or_impossible_motion():

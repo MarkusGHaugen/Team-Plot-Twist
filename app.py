@@ -22,7 +22,7 @@ from db import apply_action, claim_legacy, connect_db, load_game, new_game, rest
 from logic import (GUARD_ROUTES, GUARD_SEGMENTS, MAP_CONFIG, Position, capture_paths,
                    state_from_backup, story_progress, game_now_ms, route_points)
 from action_transport import handle_action
-from content import DOCUMENTS, ENDINGS, ITEMS, ROLES, STORY_POINTS
+from content import DOCUMENTS, ENDINGS, FINALE_RESCUE_EPILOGUE, ITEMS, ROLES, STORY_POINTS
 import finale
 import multiplayer as mp
 import shared_ship
@@ -309,6 +309,8 @@ def main():
         st.session_state.browser_backup = None
     if "browser_storage_available" not in st.session_state:
         st.session_state.browser_storage_available = True
+    if "demo_mode" not in st.session_state:
+        st.session_state.demo_mode = False
 
     identity = browser_identity_component()(
         data={"request_identity": "player_id" not in st.session_state},
@@ -346,10 +348,15 @@ def main():
         if multiplayer_lobby(player_id, api_key):
             return
         room = st.session_state.room
+    # Test runs use a disposable ID so the shortcut cannot overwrite the player's save.
+    demo_game_id = st.session_state.get("demo_game_id")
+    demo_mode = bool(st.session_state.demo_mode and not room and isinstance(demo_game_id, str))
     # Each room has its own save, so multiplayer never touches single player.
     game_id = mp.save_id(player_id, room) if room else player_id
+    if demo_mode:
+        game_id = demo_game_id
 
-    saved = read_progress(game_id, None if room else st.session_state.browser_backup)
+    saved = read_progress(game_id, None if room or demo_mode else st.session_state.browser_backup)
     room_state = None
     if room:
         if saved is None or not st.session_state.playing:
@@ -370,16 +377,23 @@ def main():
             continue_clicked = st.button("Continue", use_container_width=True, disabled=saved is None)
         with spacer:
             # Local testing only: set TEAM_PLOT_TWIST_DEV=1. It never shows online.
-            if dev_tools_enabled() and st.button("Dev: jump to the cannon finale"):
+            if dev_tools_enabled() and st.button("Jump to cannon finale"):
+                demo_state = finale.demo_state(int(time.time() * 1000))
+                demo_game_id = f"{player_id}-demo-{uuid.uuid4().hex}"
                 with closing(connect_db(DB_PATH)) as conn:
-                    restore_game(conn, finale.demo_state(int(time.time() * 1000)), player_id)
-                begin_play()
-                st.rerun()
+                    created = restore_game(conn, demo_state, demo_game_id)
+                if created:
+                    st.session_state.demo_mode = True
+                    st.session_state.demo_game_id = demo_game_id
+                    begin_play(demo_state)
+                    st.rerun()
+                else:
+                    st.error("Could not create a temporary test save. Your saved game was left untouched.")
 
     if new_clicked:
         if saved is None:
             with closing(connect_db(DB_PATH)) as conn:
-                new_game(conn, player_id)
+                new_game(conn, game_id)
             begin_play(show_intro=True)
         else:
             st.session_state.confirm_new = True
@@ -394,15 +408,28 @@ def main():
         with yes_col:
             if st.button("Confirm New Game", use_container_width=True):
                 with closing(connect_db(DB_PATH)) as conn:
-                    new_game(conn, player_id)
+                    new_game(conn, game_id)
                 begin_play(show_intro=True)
                 st.rerun()
         with no_col:
             if st.button("Cancel", use_container_width=True):
                 st.session_state.confirm_new = False
                 st.rerun()
-        sync_browser_backup(player_id, saved)
+        if not demo_mode:
+            sync_browser_backup(player_id, saved)
         return
+
+    if demo_mode:
+        exit_col, _ = st.columns([1, 5])
+        with exit_col:
+            if st.button("Exit test run", use_container_width=True):
+                with closing(connect_db(DB_PATH)) as conn:
+                    conn.execute("DELETE FROM progress WHERE player_id=?", (game_id,))
+                st.session_state.demo_mode = False
+                st.session_state.pop("demo_game_id", None)
+                st.session_state.playing = False
+                st.rerun()
+        st.caption("Test run · your regular saved game is unchanged.")
 
     if not st.session_state.playing or saved is None:
         if saved is None:
@@ -425,6 +452,7 @@ def main():
         "story": progress,
         "documents": DOCUMENTS,
         "endings": ENDINGS,
+        "rescue_epilogue": FINALE_RESCUE_EPILOGUE,
         "finale": finale.public(saved),
         "roles": ROLES,
         "run_id": st.session_state.run_id,
@@ -494,7 +522,7 @@ def main():
                 save_position(conn, position, game_id)
 
     current = read_progress(game_id)
-    if not room:
+    if not room and not demo_mode:
         sync_browser_backup(player_id, current)
     if current is not None:
         inventory, doorway, place = st.columns(3)

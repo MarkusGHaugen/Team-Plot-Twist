@@ -1,11 +1,12 @@
 """Cannon finale: after an ending the guards return and the player dodges 10 cannonballs."""
 import json
+import sqlite3
 from dataclasses import asdict, replace
 import pytest
 import finale
 import logic as L
-from content import ENDINGS
-from db import connect_db, restore_game, load_game, apply_action
+from content import ENDINGS, FINALE_RESCUE_EPILOGUE
+from db import connect_db, restore_game, load_game, apply_action, new_game
 from logic import Position, initial_state, state_from_backup, story_progress
 from test_canvas_rules import canvas, NODE
 
@@ -51,19 +52,37 @@ def test_finale_cannot_start_before_an_ending_and_nothing_changes():
     s = replace(ended(), ending='')
     result = finale.start(s, T0)
     assert not result.accepted and result.state == s
+    with connect_db(':memory:') as c:
+        restore_game(c,s,'p')
+        db_result=apply_action(c,'finale_start',s.position,0.,'p',now_ms=T0)
+        assert not db_result.accepted and db_result.state==s and load_game(c,'p')==s
 
 
 @pytest.mark.parametrize('ending', ['takeover', 'crate', 'dinghy', 'command', 'lullaby', 'castaway'])
 def test_every_one_of_the_six_endings_can_start_the_finale(ending):
     s = replace(ended('castaway'), ending=ending)
     f = fin(accepted(finale.start(s, T0)))
-    assert f['status'] == 'active' and f['origin'] == ending and f['attempt'] == 1 and f['started'] == T0
+    assert f['status'] == 'active' and f['attempt'] == 1 and f['started'] == T0
 
 
 def test_finale_starts_only_once():
     s = started()
     again = finale.start(s, T0 + 5000)
     assert not again.accepted and again.state == s
+
+
+def test_retry_is_only_accepted_after_a_caught_result():
+    s=started()
+    assert not finale.retry(s,T0+1).accepted
+    won=accepted(finale.report(s,perfect(fin(s)['seed']),after_volley(s)))
+    assert not finale.retry(won,T0+finale.END_MS+1000).accepted
+
+
+def test_escape_demo_starts_before_the_cannon_plot_twist():
+    s = finale.demo_escape_state()
+    assert s.ending == 'castaway'
+    assert fin(s) is None
+    assert state_from_backup(asdict(s)) == s
 
 
 def test_finale_cannot_start_after_it_was_won():
@@ -119,13 +138,14 @@ def test_one_move_cannot_dodge_two_balls():
 
 # ---- reporting the result -------------------------------------------------
 
-def test_two_hits_and_eight_dodges_still_wins_and_records_the_ending():
+def test_two_hits_and_eight_dodges_win_without_changing_the_reached_ending():
     s = started()
     seed = fin(s)['seed']
     won = accepted(finale.report(s, perfect(seed, skip=(2, 5)), after_volley(s)))
-    assert won.ending == 'free'
+    assert won.ending == s.ending == 'castaway'
+    assert replace(won,story_state=s.story_state)==s
     f = fin(won)
-    assert f['status'] == 'won' and f['origin'] == 'castaway' and (f['dodged'], f['hits']) == (8, 2)
+    assert f['status'] == 'won' and (f['dodged'], f['hits']) == (8, 2)
     assert state_from_backup(asdict(won)) is not None
 
 
@@ -134,6 +154,7 @@ def test_three_hits_means_caught_and_the_earlier_ending_is_kept():
     seed = fin(s)['seed']
     lost = accepted(finale.report(s, perfect(seed, skip=(0, 4, 9)), after_volley(s)))
     assert lost.ending == 'castaway'
+    assert replace(lost,story_state=s.story_state)==s
     f = fin(lost)
     assert f['status'] == 'lost' and (f['dodged'], f['hits']) == (7, 3)
     assert story_progress(lost)['items'] == ['sleeping_pills']
@@ -169,25 +190,24 @@ def test_report_without_an_active_finale_is_rejected():
     assert not finale.report(won, [], T0 + 999_999).accepted
 
 
-# ---- retry ----------------------------------------------------------------
+# ---- capture and restart ---------------------------------------------------
 
-def test_retry_after_a_loss_starts_a_fresh_attempt_and_keeps_everything_earned():
+def test_caught_player_can_retry_without_resetting_the_game():
     s = started()
     lost = accepted(finale.report(s, [], after_volley(s)))
-    again = accepted(finale.retry(lost, T0 + 90_000))
-    f = fin(again)
-    assert f['status'] == 'active' and f['attempt'] == 2 and f['origin'] == 'castaway'
-    assert 'hits' not in f and again.ending == 'castaway'
-    assert story_progress(again)['items'] == ['sleeping_pills']
-    assert len(finale.volley(f['seed'])) == 10
-
-
-def test_retry_is_rejected_unless_the_player_was_caught():
-    s = started()
-    assert not finale.retry(s, T0 + 1).accepted
-    assert not finale.retry(ended(), T0 + 1).accepted
-    won = accepted(finale.report(s, perfect(fin(s)['seed']), after_volley(s)))
-    assert not finale.retry(won, T0 + 99_999).accepted
+    assert 'finale_retry' in finale.KINDS
+    with connect_db(':memory:') as c:
+        restore_game(c, lost, 'p')
+        pos = Position('kitchen', 1200.)
+        retry = apply_action(c, 'finale_retry', pos, 0., 'p', None, None, T0 + finale.END_MS + 1000)
+        assert retry.accepted
+        saved = load_game(c, 'p')
+        assert saved.ending == lost.ending == 'castaway'
+        assert saved.position == lost.position and saved.story_state != initial_state().story_state
+        assert saved.has_key == lost.has_key and saved.door_open == lost.door_open
+        assert story_progress(saved)['items']==story_progress(lost)['items']
+        assert fin(saved)['status'] == 'active' and fin(saved)['attempt'] == 2
+        assert state_from_backup(asdict(saved)) == saved
 
 
 # ---- what the page is told --------------------------------------------------
@@ -209,21 +229,50 @@ def test_old_ended_saves_without_a_finale_still_load():
     assert fin(s) is None and state_from_backup(asdict(s)) is not None
 
 
+def test_legacy_free_backup_migrates_to_its_reached_route():
+    legacy={**GOOD,'origin':'castaway','status':'won','dodged':10,'hits':0}
+    restored=state_from_backup(asdict(ended('free',finale_state=legacy)))
+    assert restored is not None and restored.ending=='castaway'
+    assert fin(restored)=={k:v for k,v in legacy.items() if k!='origin'}
+
+
+def test_legacy_free_database_save_migrates_before_schema_rebuild(tmp_path):
+    import db
+    path=tmp_path/'legacy.sqlite3'
+    old_sql=db._CREATE.replace(db._ENDING_CHECK,
+        "CHECK (ending IN ('','takeover','crate','dinghy','command','lullaby','castaway','free'))")
+    legacy={**GOOD,'origin':'castaway','status':'won','dodged':10,'hits':0}
+    state=ended('free',finale_state=legacy)
+    with sqlite3.connect(path) as conn:
+        columns=('player_id',*db._KEYS)
+        conn.execute(old_sql)
+        conn.execute(f"INSERT INTO progress ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})",
+                     ('p',*db._values(state)))
+    with db.connect_db(path) as conn:
+        restored=load_game(conn,'p')
+        assert restored.ending=='castaway' and fin(restored)=={k:v for k,v in legacy.items() if k!='origin'}
+        assert state_from_backup(asdict(restored))==restored
+
+
 def tampered(finale_state, ending='castaway'):
     return state_from_backup(asdict(ended(ending, finale_state=finale_state)))
 
 
-GOOD = {'status': 'active', 'origin': 'castaway', 'seed': 5, 'started': T0, 'attempt': 1}
+GOOD = {'status': 'active', 'seed': 5, 'started': T0, 'attempt': 1}
 
 
 def test_valid_finale_saves_round_trip():
-    assert tampered(GOOD) is not None
-    assert tampered({**GOOD, 'status': 'lost', 'dodged': 6, 'hits': 4}) is not None
-    assert tampered({**GOOD, 'status': 'won', 'dodged': 9, 'hits': 1}, ending='free') is not None
+    for record in (GOOD,{**GOOD, 'status': 'lost', 'dodged': 6, 'hits': 4},
+                   {**GOOD, 'status': 'won', 'dodged': 9, 'hits': 1}):
+        state=ended(finale_state=record)
+        assert state_from_backup(asdict(state))==state
+        with connect_db(':memory:') as c:
+            assert restore_game(c,state,'p')
+            assert load_game(c,'p')==state
 
 
 @pytest.mark.parametrize('bad', [
-    {**GOOD, 'status': 'done'}, {**GOOD, 'origin': 'free'}, {**GOOD, 'origin': 'nope'},
+    {**GOOD, 'status': 'done'}, {**GOOD, 'origin': 'castaway'},
     {**GOOD, 'seed': -1}, {**GOOD, 'seed': 1.5}, {**GOOD, 'started': -5}, {**GOOD, 'attempt': 0},
     {**GOOD, 'extra': 1}, {'status': 'active'},
     {**GOOD, 'status': 'lost', 'dodged': 7, 'hits': 2}, {**GOOD, 'status': 'lost', 'dodged': 10, 'hits': 0},
@@ -234,11 +283,11 @@ def test_tampered_finale_saves_are_rejected(bad):
     assert tampered(bad) is None
 
 
-def test_a_won_finale_needs_the_free_ending_and_the_free_ending_needs_a_win():
+def test_finale_result_requires_an_ending_but_does_not_replace_it():
     won = {**GOOD, 'status': 'won', 'dodged': 10, 'hits': 0}
-    assert tampered(won, ending='castaway') is None
-    assert tampered(GOOD, ending='free') is None
-    assert tampered(None, ending='free') is None
+    assert tampered(won, ending='castaway') is not None
+    assert tampered(GOOD, ending='') is None
+    assert tampered(None, ending='') is not None
 
 
 def test_a_finale_save_needs_an_ending():
@@ -246,9 +295,11 @@ def test_a_finale_save_needs_an_ending():
     assert state_from_backup(asdict(s)) is None
 
 
-def test_free_ending_is_the_seventh_and_has_text():
-    assert ENDINGS['free']['title'] and ENDINGS['free']['body']
-    assert all(e['subtitle'].startswith('Ending ') and 'of 7' in e['subtitle'] for e in ENDINGS.values())
+def test_six_routes_and_rescue_epilogue_are_separate():
+    assert 'free' not in ENDINGS
+    assert FINALE_RESCUE_EPILOGUE['title'] and FINALE_RESCUE_EPILOGUE['body']
+    assert len(ENDINGS) == 6
+    assert all(e['subtitle'].startswith('Ending ') and 'of 6' in e['subtitle'] for e in ENDINGS.values())
 
 
 # ---- through the database and the action pipeline ---------------------------
@@ -264,7 +315,8 @@ def test_actions_work_through_the_database_and_survive_a_reload(tmp_path):
         early = apply_action(c, 'finale_report', pos, 0., 'p', None, json.dumps(perfect(seed)), T0 + 1000)
         assert not early.accepted and fin(load_game(c, 'p'))['status'] == 'active'
         done = apply_action(c, 'finale_report', pos, 0., 'p', None, json.dumps(perfect(seed)), T0 + finale.END_MS + 500)
-        assert done.accepted and load_game(c, 'p').ending == 'free'
+        assert done.accepted and load_game(c, 'p').ending == 'castaway'
+        assert fin(load_game(c, 'p'))['status'] == 'won'
         assert fin(load_game(c, 'p'))['hits'] == 0
 
 
@@ -287,13 +339,29 @@ def test_a_bad_item_string_is_rejected_not_crashed(tmp_path):
         assert fin(load_game(c, 'p'))['status'] == 'active'
 
 
-def test_restart_still_works_after_the_free_ending(tmp_path):
+def test_restart_action_cannot_bypass_new_game_confirmation_and_new_game_resets_both(tmp_path):
     with connect_db(tmp_path / 'f.sqlite3') as c:
         s = started()
         won = accepted(finale.report(s, perfect(fin(s)['seed']), after_volley(s)))
         restore_game(c, won, 'p')
-        r = apply_action(c, 'restart_game', Position('kitchen', 1200.), 0., 'p', None, None, T0 + 10 ** 6)
-        assert r.accepted and load_game(c, 'p').ending == ''
+        pos=Position('kitchen', 1200.)
+        for item in (None,'confirmed'):
+            denied=apply_action(c, 'restart_game', pos, 0., 'p', None, item, T0 + 10 ** 6)
+            assert not denied.accepted and load_game(c, 'p')==won
+        fresh=new_game(c, 'p')
+        assert fresh==initial_state() and story_progress(load_game(c, 'p')).get('voyage',{}).get('finale') is None
+        restore_game(c, s, 'q')
+        fresh=new_game(c, 'q')
+        assert fresh==initial_state() and story_progress(load_game(c, 'q')).get('voyage',{}).get('finale') is None
+
+
+def test_ordinary_actions_after_an_ending_are_rejected_without_changes(tmp_path):
+    with connect_db(tmp_path / 'f.sqlite3') as c:
+        s=started()
+        restore_game(c,s,'p')
+        for kind,item in (('journal',None),('story_inspect','captains_log'),('move',None),('restart_prompt',None)):
+            result=apply_action(c,kind,s.position,0.,'p',None,item,T0+100)
+            assert not result.accepted and result.state==s and load_game(c,'p')==s
 
 
 def test_other_actions_stay_blocked_during_the_finale(tmp_path):
@@ -318,7 +386,7 @@ def test_finale_is_shared_in_a_room_and_every_save_stays_valid():
     assert fin(b2) == fin(a2) and state_from_backup(asdict(b2)) is not None
     won = accepted(finale.report(a2, perfect(fin(a2)['seed']), after_volley(a2)))
     b3 = shared_ship.apply_world(b2, shared_ship.world_changes(a2, won))
-    assert b3.ending == 'free' and fin(b3)['status'] == 'won' and state_from_backup(asdict(b3)) is not None
+    assert b3.ending == 'castaway' and fin(b3)['status'] == 'won' and state_from_backup(asdict(b3)) is not None
     lost = accepted(finale.report(a2, [], after_volley(a2)))
     b4 = shared_ship.apply_world(b2, shared_ship.world_changes(a2, lost))
     assert b4.ending == 'castaway' and fin(b4)['status'] == 'lost' and state_from_backup(asdict(b4)) is not None
@@ -331,6 +399,36 @@ def test_canvas_finale_constants_match_the_server():
     js = canvas('FINALE', {})
     assert js == {'balls': finale.BALLS, 'lives': finale.LIVES, 'endMs': finale.END_MS,
                   'windowBefore': finale.WINDOW_BEFORE_MS, 'windowAfter': finale.WINDOW_AFTER_MS}
+
+
+@pytest.mark.skipif(NODE is None, reason='Node is needed to execute the actual Canvas rules')
+def test_beach_music_switches_from_celebration_to_the_guard_theme():
+    data = {'ending': 'castaway', 'finale': {'status': 'active'}}
+    assert canvas('finaleCelebrationNow(input.data,{t:1000})', {'data': data})
+    assert not canvas('finaleDarkNow(input.data,{t:2599})', {'data': data})
+    assert canvas('finaleDarkNow(input.data,{t:2600})', {'data': data})
+    assert not canvas('finaleCelebrationNow(input.data,{t:2600})', {'data': data})
+
+
+@pytest.mark.skipif(NODE is None, reason='Node is needed to execute the actual Canvas rules')
+def test_cannonball_inputs_wait_until_the_beach_scene_ends():
+    data = {'ending': 'castaway', 'finale': {'status': 'active'}}
+    client = {'data': data, 'fin': {'t': 1000, 'over': False, 'moves': []}}
+    result = canvas('(()=>{const consumed=finaleKey(input.client," ",false);return [consumed,input.client.fin.moves];})()',
+                    {'client': client})
+    assert result == [True, []]
+
+
+@pytest.mark.skipif(NODE is None, reason='Node is needed to execute the actual Canvas rules')
+def test_beach_twist_and_captured_return_scenes_render_without_errors():
+    expression = r'''(() => {
+      const ctx=new Proxy({}, {get:(_,key)=>key==='createLinearGradient'||key==='createRadialGradient'
+        ?()=>({addColorStop:()=>{}}):()=>{}, set:()=>true});
+      drawBeachTwist(ctx,900,500,input.t);
+      drawCapturedReturn(ctx,900,500,3500);
+      return true;
+    })()'''
+    assert canvas(expression, {'t': 7000})
 
 
 @pytest.mark.skipif(NODE is None, reason='Node is needed to execute the actual Canvas rules')

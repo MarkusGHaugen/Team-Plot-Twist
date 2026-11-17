@@ -629,6 +629,19 @@ def state_from_backup(payload: object) -> GameState | None:
     if suspect_zone and not valid_position(Position(suspect_zone,suspect_value),True): return None
     story = payload.get('story_state', '{}')
     ending = payload.get('ending', '')
+    # Older local builds used ``free`` for a won cannon finale. Migrate that
+    # backup back to its recorded escape route before normal validation.
+    if ending == 'free' and isinstance(story, str):
+        try:
+            legacy = json.loads(story)
+            old_finale = legacy.get('voyage', {}).get('finale', {})
+            origin = old_finale.get('origin')
+            if old_finale.get('status') == 'won' and origin in ENDINGS:
+                ending = origin
+                old_finale.pop('origin', None)
+                story = json.dumps(legacy, separators=(',', ':'))
+        except (ValueError, TypeError, AttributeError):
+            pass
     reading = payload.get('reading', '')
     paused_at = payload.get('paused_at_ms', 0)
     paused_total = payload.get('paused_total_ms', 0)
@@ -705,13 +718,8 @@ def state_from_backup(payload: object) -> GameState | None:
         if kind!='sleeper' and (getattr(state,kind+'_corpse_x'),getattr(state,kind+'_corpse_y'))!=position_xy(Position(barrel[1],barrel[2])):return None
     if v.get('captain_worn') and not state.disguised:return None
     cannon_finale=v.get('finale')
-    if cannon_finale is not None:
-        # The finale belongs to an ending: a win turns it into "free", anything else keeps it.
-        if cannon_finale['status']=='won':
-            if ending!='free':return None
-        elif ending!=cannon_finale['origin']:return None
-    elif ending=='free':return None
-    reached=cannon_finale['origin'] if ending=='free' else ending
+    if cannon_finale is not None and not ending:return None
+    reached=ending
     if reached=='command' and not captain_ready(state):return None
     if reached == 'takeover' and opponents_remaining(state): return None
     if reached == 'crate' and not crate_ready(state): return None
