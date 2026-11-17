@@ -55,6 +55,16 @@ def read_progress(player_id: str, browser_backup=None):
         return state
 
 
+def dev_tools_enabled() -> bool:
+    """Local testing only. Set TEAM_PLOT_TWIST_DEV=1 as an environment variable or as a Streamlit secret."""
+    if os.environ.get("TEAM_PLOT_TWIST_DEV") == "1":
+        return True
+    try:
+        return str(st.secrets.get("TEAM_PLOT_TWIST_DEV", "")) == "1"
+    except Exception:
+        return False
+
+
 def begin_play(state=None, epoch_ms=None, show_intro=False):
     st.session_state.playing = True
     st.session_state.confirm_new = False
@@ -360,7 +370,7 @@ def main():
             continue_clicked = st.button("Continue", use_container_width=True, disabled=saved is None)
         with spacer:
             # Local testing only: set TEAM_PLOT_TWIST_DEV=1. It never shows online.
-            if os.environ.get("TEAM_PLOT_TWIST_DEV") == "1" and st.button("Dev: jump to the cannon finale"):
+            if dev_tools_enabled() and st.button("Dev: jump to the cannon finale"):
                 with closing(connect_db(DB_PATH)) as conn:
                     restore_game(conn, finale.demo_state(int(time.time() * 1000)), player_id)
                 begin_play()
