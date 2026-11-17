@@ -2699,7 +2699,7 @@ function drawCastaway(ctx, w, h, t, client) {
 }
 function drawEnding(ctx,w,h,client) {
   if(client.data.finale&&client.data.finale.status!=='won'){drawFinale(ctx,w,h,client);return;}
-  if(client.data.ending==='free'){drawRescue(ctx,w,h,Math.min(RESCUE_SECONDS,Math.max(0,(performance.now()-client.endingStartedAt)/1000)));return;}
+  if(client.data.ending==='free'){const still=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;drawRescue(ctx,w,h,still?5.4:Math.min(RESCUE_SECONDS,Math.max(0,(performance.now()-client.endingStartedAt)/1000)));return;}
   const reduced=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches,elapsed=Math.max(0,(performance.now()-client.endingStartedAt)/1000);
   if(client.data.ending==='crate'&&elapsed<CRATE_NIGHT_SECONDS){drawCratePrelude(ctx,w,h,reduced?4:elapsed);return;}
   if(client.data.ending==='dinghy'){drawDinghyEscape(ctx,w,h,reduced?21:elapsed,client);return;}
@@ -2793,6 +2793,9 @@ function drawFinale(ctx,w,h,client){
   for(let x=0;x<w*.44;x+=46*unit)line(ctx,x,gy,x,h,'#3b271b',3);
   // The guards: two stacked cannons on the nearest boat and more boats behind.
   finaleBoat(ctx,w*.9+slide,seaY+14*unit,unit*1.4,true);finaleBoat(ctx,w*.62+slide*1.3,seaY+8*unit,unit*1.0,true);
+  const gx=fireX+slide;
+  ctx.fillStyle='#4b2f25';ctx.strokeStyle='#1d130f';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(gx-40*unit,gy+6*unit);ctx.lineTo(gx+230*unit,gy+6*unit);ctx.lineTo(gx+190*unit,gy+78*unit);ctx.quadraticCurveTo(gx+80*unit,gy+96*unit,gx-10*unit,gy+78*unit);ctx.closePath();ctx.fill();ctx.stroke();
+  line(ctx,gx-40*unit,gy+10*unit,gx+230*unit,gy+10*unit,'#c99a62',4);
   roundBox(ctx,fireX+30*unit+slide,highY-18*unit,54*unit,(gy-highY)+22*unit,4,'#3d281e','#170f0b');
   const fired=(fin&&f.balls||[]).map((b,i)=>({b,i,p:fin?(fin.t-(b.at-FINALE_TRAVEL_MS))/FINALE_TRAVEL_MS:-1}));
   const flashFor=lane=>{let m=0;for(const o of fired)if(o.b.lane===lane&&o.p>=0&&o.p<.18)m=Math.max(m,1-o.p/.18);return m;};

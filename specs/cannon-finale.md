@@ -18,7 +18,8 @@ Acceptance notes. Written before any code, as `AGENTS.md` asks. Numbers in **bol
 6. The finale is won only when all 10 balls are resolved and at least 1 life remains. The client may animate this, but only the server can declare it won.
 7. On a win the rescue boat with the dog arrives, and a new ending panel appears: **"Free at last"** (`ending 7`). The earlier ending stays recorded.
 8. On a loss the player is "caught" and may **retry the finale from the first cannonball**. A loss never deletes the earlier ending, items or coins.
-9. Reloading the page during the finale resumes it: same ball count, same lives. A finished finale (won) cannot be replayed except through Restart.
+9. Reloading the page during the finale restarts the current attempt from the first ball (same volley, 10 balls, 3 lives). A finished finale (won) cannot be replayed except through Restart.
+9a. The server accepts a report when the volley is over, or earlier once the third hit has landed. A report that arrives before that is rejected and changes nothing.
 10. Older saves without finale data load exactly as before (migration in `db.py`).
 
 ## What the player sees and hears
@@ -27,7 +28,7 @@ Acceptance notes. Written before any code, as `AGENTS.md` asks. Numbers in **bol
 - HUD: cannonballs left (**10**) and lives (**3** hearts).
 - Guard boats and cannons in the background, with a puff of smoke before each shot so the lane can be read.
 - Rescue scene: the intro's boat and dog (`introSkiff`, `introDog`, `introPerson` in `game.js`) arrive from the side and the player boards.
-- Reduced-motion mode: balls are shown as a clear telegraph (lane marker plus countdown) instead of fast movement, and the finale remains playable.
+- Reduced-motion mode: the lane marker with the word JUMP or DUCK is shown for the whole flight of every ball (it normally appears after a third of the flight). The timing is the same, so the finale stays playable; the rescue is shown as one still frame.
 
 ## Acceptance checks
 
@@ -38,7 +39,7 @@ Acceptance notes. Written before any code, as `AGENTS.md` asks. Numbers in **bol
 - The counter reaches 0 only after the 10th ball is resolved, and never goes negative.
 - A client that claims victory early is rejected and nothing changes.
 - Retry after a loss restarts at 10 balls and 3 lives; the earlier ending and inventory are kept.
-- Reloading mid-finale restores the same ball count and lives.
+- Reloading mid-finale restarts the attempt with the same volley, 10 balls and 3 lives.
 - An old save with no finale data still loads.
 - The "Free at last" ending shows after a win and can be replayed through Restart.
 - Reduced-motion mode shows the telegraph and the rescue scene.
@@ -63,11 +64,11 @@ New file `tests/test_cannon_finale.py`, in the style of `tests/test_sleeping_pil
 - Difficulty settings.
 - A leaderboard.
 
-## Open choices (the group decides)
+## Decisions taken (change them if the group disagrees)
 
-- Which endings trigger it: **all six**, or only some?
-- Lives: **3**.
-- Volley length and speed: **10 balls over about 40 seconds**.
-- Multiplayer: the ship is shared, so does the finale have **shared lives** or **one set per player**?
-- On a loss: **retry** (proposed) or go back to the cell?
-- Who owns what: the intro scene belongs to Hannah. The finale reuses her drawing functions and should call them, not copy them.
+- Endings that trigger it: **all six**. The finale starts a few seconds after the ending's own scene ends.
+- Lives: **3**. Volley: **10 balls over about 38 seconds**, with a small random jitter in the timing that the server fixes with the seed.
+- On a loss: **retry** from the first ball. The earlier ending is kept.
+- Multiplayer: the ship is shared, so the finale is shared. Both players see the same volley and play it on their own screens; whoever's report reaches the server first decides the result for both.
+- Known limit: the server judges the moves the page reports and checks the timing window and that enough time has passed, but it cannot see the keyboard. A player who edits the page could send perfect moves. That is acceptable for a class game; the rules and saves are still validated on the server.
+- Ownership: the intro scene belongs to Hannah. The rescue scene calls her drawing functions (`introSkiff`, `introDog`, `introPerson`, `introPirate`) and does not copy them.

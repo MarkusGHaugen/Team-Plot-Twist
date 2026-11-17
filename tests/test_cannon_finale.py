@@ -302,6 +302,22 @@ def test_other_actions_stay_blocked_during_the_finale(tmp_path):
         assert not apply_action(c, 'journal', Position('kitchen', 1200.), 0., 'p', None, None, T0).accepted
 
 
+# ---- multiplayer: one shared ship, so one shared finale -------------------------
+
+def test_finale_is_shared_in_a_room_and_every_save_stays_valid():
+    import shared_ship
+    a, b = ended(), ended()
+    a2 = accepted(finale.start(a, T0))
+    b2 = shared_ship.apply_world(b, shared_ship.world_changes(a, a2))
+    assert fin(b2) == fin(a2) and state_from_backup(asdict(b2)) is not None
+    won = accepted(finale.report(a2, perfect(fin(a2)['seed']), after_volley(a2)))
+    b3 = shared_ship.apply_world(b2, shared_ship.world_changes(a2, won))
+    assert b3.ending == 'free' and fin(b3)['status'] == 'won' and state_from_backup(asdict(b3)) is not None
+    lost = accepted(finale.report(a2, [], after_volley(a2)))
+    b4 = shared_ship.apply_world(b2, shared_ship.world_changes(a2, lost))
+    assert b4.ending == 'castaway' and fin(b4)['status'] == 'lost' and state_from_backup(asdict(b4)) is not None
+
+
 # ---- the page and the server agree ---------------------------------------------
 
 @pytest.mark.skipif(NODE is None, reason='Node is needed to execute the actual Canvas rules')
