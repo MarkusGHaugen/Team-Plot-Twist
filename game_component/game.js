@@ -1313,12 +1313,14 @@ function introPerson(ctx,x,y,scale=1,{reach=0,bound=false,sack=false,scared=fals
   // Keep the cutscene figures close to the scale and proportions of sprites in the game.
   ctx.save();ctx.translate(x,y);ctx.scale(scale*.55,scale*.55);ctx.lineCap='round';
   ctx.strokeStyle='#302b29';ctx.lineWidth=11;if(seated){line(ctx,-10,-39,-19,-17,'#514238',11);line(ctx,-19,-17,8,-17,'#514238',11);line(ctx,10,-39,23,-18,'#514238',11);line(ctx,23,-18,42,-18,'#514238',11);}else{line(ctx,-10,-39,-17,-5,'#514238',11);line(ctx,10,-39,18,-5,'#514238',11);}
-  roundBox(ctx,-24,-84,48,49,13,color,'#2c2927');
+  roundBox(ctx,-22,-84,44,49,11,color,'#2c2927');
   line(ctx,-23,-72,reach<0?-60:-38,-51,'#d19a71',10);
   line(ctx,23,-72,reach>0?60:bound?31:43,-50,'#d19a71',10);
-  ctx.fillStyle='#cb9270';ctx.beginPath();ctx.arc(0,-103,22,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle='#263940';ctx.beginPath();ctx.arc(0,-111,23,Math.PI,Math.PI*2);ctx.lineTo(21,-103);ctx.lineTo(-20,-103);ctx.closePath();ctx.fill();line(ctx,-20,-101,20,-101,'#b5c9be',5);
-  ctx.fillStyle='#272322';ctx.beginPath();ctx.arc(-7,-103,scared?3:2,0,Math.PI*2);ctx.arc(7,-103,scared?3:2,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#d0a173';ctx.beginPath();ctx.arc(0,-103,19,0,Math.PI*2);ctx.fill();
+  const uniform=color==='#9c3d33';
+  ctx.fillStyle=uniform?'#332c29':'#263940';ctx.beginPath();ctx.moveTo(-18,-103);ctx.lineTo(-16,-119);ctx.lineTo(-9,-127);ctx.lineTo(0,-123);ctx.lineTo(11,-127);ctx.lineTo(18,-119);ctx.lineTo(19,-103);ctx.closePath();ctx.fill();
+  line(ctx,-20,-101,20,-101,uniform?'#dbb36e':'#b5c9be',4);
+  ctx.fillStyle='#272322';ctx.beginPath();ctx.arc(6,-103,scared?3:2,0,Math.PI*2);ctx.fill();
   line(ctx,-1,-98,3,-94,'#86563f',2);if(scared){ctx.fillStyle='#4d2525';ctx.beginPath();ctx.ellipse(0,-87,5,7,0,0,Math.PI*2);ctx.fill();}else line(ctx,-6,-88,6,-88,'#7b413b',2);
   if(bound){line(ctx,-25,-53,25,-53,'#d7b77c',5);line(ctx,-12,-59,-18,-47,'#d7b77c',3);line(ctx,12,-59,18,-47,'#d7b77c',3);}
   if(sack){
@@ -1365,7 +1367,7 @@ function introSkiff(ctx,x,y,scale,player,dog,t) {
 }
 function introPirate(ctx,x,y,scale=1) {
   introPerson(ctx,x,y,scale,{color:'#9c3d33'});
-  ctx.save();ctx.translate(x,y);ctx.scale(scale*.55,scale*.55);ctx.fillStyle='#302724';ctx.beginPath();ctx.moveTo(-29,-72);ctx.lineTo(0,-87);ctx.lineTo(30,-72);ctx.closePath();ctx.fill();line(ctx,-18,-70,20,-70,'#d4b878',4);
+  ctx.save();ctx.translate(x,y);ctx.scale(scale*.55,scale*.55);
   line(ctx,12,-42,34,-76,'#d9e0e4',4);line(ctx,12,-42,19,-34,'#9a7948',5);line(ctx,34,-76,39,-84,'#fff0cb',2);ctx.restore();
 }
 function drawIntroCell(ctx,w,h,t,clamp01) {
@@ -1411,7 +1413,12 @@ function drawIntroScene(ctx,w,h,t) {
       ctx.save();ctx.globalAlpha=pirateReveal;ctx.translate(px,py);ctx.scale(boatScale,boatScale);
       ctx.fillStyle='#563c30';ctx.strokeStyle='#241e1c';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-125,-6);ctx.quadraticCurveTo(0,22,125,-6);ctx.lineTo(99,25);ctx.quadraticCurveTo(0,43,-99,25);ctx.closePath();ctx.fill();ctx.stroke();
       ctx.fillStyle='#271f1d';ctx.beginPath();ctx.moveTo(-22,-5);ctx.lineTo(-20,-148);ctx.lineTo(0,-135);ctx.closePath();ctx.fill();ctx.beginPath();ctx.moveTo(23,-5);ctx.lineTo(20,-132);ctx.lineTo(48,-30);ctx.closePath();ctx.fill();
-      // One pirate stands on each deck, with a raised sword instead of mast-like stray lines.
+      // Each mast flies a small black Jolly Roger with a white skull and crossed bones.
+      line(ctx,-20,-146,-20,-166,'#392b24',2.5);
+      ctx.fillStyle='#17191a';ctx.beginPath();ctx.moveTo(-19,-165);ctx.quadraticCurveTo(-3,-161,1,-155);ctx.quadraticCurveTo(-8,-148,-19,-149);ctx.closePath();ctx.fill();
+      ctx.fillStyle='#e7dfc9';ctx.beginPath();ctx.arc(-11,-158,3.2,0,Math.PI*2);ctx.fill();
+      line(ctx,-15,-153,-8,-149,'#e7dfc9',1.5);line(ctx,-15,-149,-8,-153,'#e7dfc9',1.5);
+      // One pirate stands on each deck, dressed like the game's red-coated guards.
       introPirate(ctx,0,8,1.05);line(ctx,-19,-122,29,-94,'rgba(231,211,164,.7)',2);ctx.restore();
     });
     ctx.restore();
@@ -1419,21 +1426,22 @@ function drawIntroScene(ctx,w,h,t) {
   const dogFade=1-clamp01((t-19.4)/.8);
   if(t<19.4){
     if(t<14.3){
-      introSkiff(ctx,boatX,boatY,unit,t<11?{reach:t>=8?1:0,seated:t<8}:null,null,t);
+      introSkiff(ctx,boatX,boatY,unit,t<10.2?{reach:0,seated:true}:null,null,t);
       // Let the water cover the submerged half of the hull and the character's legs.
       const surface=ctx.createLinearGradient(0,sea,0,h);surface.addColorStop(0,'#287185');surface.addColorStop(1,'#102f42');ctx.fillStyle=surface;ctx.fillRect(0,sea,w,h-sea);
       line(ctx,0,sea+2,w,sea+2,'rgba(230,222,188,.42)',2);
     }
     if(t>=6.8&&t<10.4)introFish(ctx,boatX+150*unit,sea+h*.065+Math.sin(t*4)*4,unit*.7);
-    const dogStart=boatY-42*unit,dogWater=sea+h*.02,dy=dogStart+(dogWater-dogStart)*jump-Math.sin(Math.PI*jump)*h*.055+(t>=10?Math.sin(t*7)*2:0);
-    const swim=clamp01((t-10)/.8),dx=boatX+unit*(92+250*jump+24*swim+Math.sin(t*3)*7*swim);
-    if(t<8.7)introDog(ctx,boatX+92*unit,boatY-42*unit,unit*.82,Math.sin(t*4)*.04,{fade:1});
-    else if(t<19.4){introDog(ctx,dx,dy,unit*.82,jump<1?-.2*jump:.02*Math.sin(t*4),{wet:t>=10,fade:dogFade,paddling:t});
+    const dogStart=boatY-36*unit,dogWater=sea+h*.02,dy=dogStart+(dogWater-dogStart)*jump-Math.sin(Math.PI*jump)*h*.16+(t>=10?Math.sin(t*7)*2:0);
+    const swim=clamp01((t-10)/.8),dx=boatX+unit*(48+310*jump+24*swim+Math.sin(t*3)*7*swim);
+    if(t<8.7)introDog(ctx,boatX+48*unit,boatY-36*unit,unit*.82,0,{fade:1});
+    else if(t<19.4){introDog(ctx,dx,dy,unit*.82,jump<1?-.35*jump:.02*Math.sin(t*4),{wet:t>=10,fade:dogFade,paddling:t});
       if(t>=9.9&&t<12.5){ctx.save();ctx.strokeStyle='rgba(230,245,237,.9)';ctx.lineWidth=3;for(let i=0;i<7;i++){ctx.beginPath();ctx.arc(dx+(i-3)*12,dy-8,6+i%2*5,Math.PI*1.1,Math.PI*1.9);ctx.stroke();}ctx.restore();}}
-    if(t>=11&&t<19.4){
-      const hx=boatX+unit*(390+Math.sin(t*2)*8),hy=sea+h*.02+Math.sin(t*5)*3;
-      ctx.save();ctx.translate(hx,hy);ctx.rotate(Math.PI/2);introPerson(ctx,0,0,unit,{reach:1,color:'#2d6b73'});ctx.restore();
-      ctx.save();ctx.strokeStyle='rgba(230,245,237,.85)';ctx.lineWidth=3;for(let i=0;i<8;i++){ctx.beginPath();ctx.arc(hx+(i-4)*15,hy+Math.sin(t*3+i)*5,5+i%2*5,Math.PI*1.1,Math.PI*1.9);ctx.stroke();}ctx.restore();
+    if(t>=10.2&&t<19.4){
+      const dive=clamp01((t-10.2)/1.35),diveEase=dive*dive*(3-2*dive),startX=boatX-46*unit;
+      const hx=startX+(boatX+unit*390-startX)*diveEase+Math.sin(t*2)*4*dive,hy=boatY-26*unit+(sea+h*.02-(boatY-26*unit))*diveEase-Math.sin(Math.PI*dive)*h*.16+(t>=11.55?Math.sin(t*5)*3:0);
+      ctx.save();ctx.translate(hx,hy);ctx.rotate(Math.PI/2*diveEase);introPerson(ctx,0,0,unit,{reach:1,color:'#2d6b73'});ctx.restore();
+      if(t>=11.5){ctx.save();ctx.strokeStyle='rgba(230,245,237,.85)';ctx.lineWidth=3;for(let i=0;i<8;i++){ctx.beginPath();ctx.arc(hx+(i-4)*15,hy+Math.sin(t*3+i)*5,5+i%2*5,Math.PI*1.1,Math.PI*1.9);ctx.stroke();}ctx.restore();}
     }
   }
   ctx.restore();
