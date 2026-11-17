@@ -1936,7 +1936,12 @@ function storyDecor(ctx,d) {
 }
 
 const CRATE_NIGHT_SECONDS=8;
-const CASTAWAY_SECONDS=28;
+const CASTAWAY_SECONDS = 32;
+const CASTAWAY_CELL_SECONDS = 5;
+const CASTAWAY_DRIFT_START = 9;
+const CASTAWAY_DAY_SECONDS = 4;
+const CASTAWAY_SHORE_START = CASTAWAY_DRIFT_START + 4 * CASTAWAY_DAY_SECONDS;
+
 function endingPreludeActive(client) {
   const t=(performance.now()-client.endingStartedAt)/1000;
   const reduced=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1944,7 +1949,7 @@ function endingPreludeActive(client) {
 }
 function cinematicLabel(client) {
   const t=(performance.now()-client.endingStartedAt)/1000;
-  if(client.data.ending==='castaway'){const m=castawayMotion(1000,560,t);return m.phase==='cell'?'THE COLD FLOOR OF THE CELL':m.phase==='overboard'?'OVER THE SIDE':m.phase==='adrift'?`ADRIFT · DAY ${m.day} OF 4`:'WASHED ASHORE';}
+  if(client.data.ending==='castaway'){const m=castawayMotion(1000,560,t);return m.phase==='cell'?(m.found?'THE GUARDS FIND YOU':'THE COLD FLOOR OF THE CELL'):m.phase==='overboard'?'OVER THE SIDE':m.phase==='adrift'?`ADRIFT · DAY ${m.day} OF 4`:'AT THE WATER’S EDGE';}
   if(client.data.ending==='lullaby')return 'THE CREW SLEEPS · THE HELM IS YOURS';
   return client.data.ending==='command'?'A CAPTAIN BY DECEPTION · HEADING HOME':client.data.ending==='crate'?(t<CRATE_NIGHT_SECONDS?'NIGHTFALL · WAITING FOR DAWN':'DAWN · THE RETURN DELIVERY'):client.data.ending==='dinghy'?'LOWERING THE DINGHY · FREEDOM AWAITS':'THE HELM IS YOURS · SETTING SAIL';
 }
@@ -2039,91 +2044,453 @@ function drawCommandPrelude(ctx,w,h,client) {
   person(ctx,p.x,p.y,false,0,'none','right',false,true,'officer',client.data.rules.guard_styles.officer);
   speechBubble(ctx,p.x,p.y-110,"All ahoy! We're heading home.");ctx.restore();
 }
-// Castaway: pills in the cell, thrown overboard in a barrel, four days adrift,
-// then washed up on the island seen through the telescope.
-function castawayMotion(w,h,t) {
-  const horizon=h*.45,mid=w*.5;
-  if(t<3.5)return {phase:'cell',fade:clamp((t-2)/1.5,0,1),day:0,horizon};
-  if(t<8) {
-    const u=t-3.5,carry=clamp(u/2,0,1),air=clamp((u-2)/1,0,1),sink=clamp((u-3)/1.5,0,1);
-    return {phase:'overboard',carry,air,sink,splash:u>=3?u-3:-1,day:0,horizon};
-  }
-  if(t<22) {
-    const d=(t-8)/3.5,day=Math.min(4,Math.floor(d)+1),f=d-Math.floor(d),storm=day===2?Math.sin(Math.PI*clamp(f/.9,0,1)):0;
-    const night=f<.55?0:f<.7?(f-.55)/.15:f<.9?1:1-(f-.9)/.1;
-    const amp=6+storm*16;
-    return {phase:'adrift',day,f,night,storm,amp,horizon,barrel:{x:mid-60+(t-8)*9,y:horizon+h*.22+Math.sin(t*2.1)*amp,rot:Math.sin(t*1.6)*(.12+storm*.35)}};
-  }
-  const u=t-22,island=clamp(u/2.5,0,1),beach=clamp((u-1.5)/2,0,1),tip=clamp((u-3.5)/.6,0,1),out=clamp((u-4.1)/1.6,0,1);
-  const shore=horizon+h*.27,start={x:mid+66,y:horizon+h*.22},end={x:w*.5,y:shore};
-  return {phase:'ashore',island,beach,tip,out,day:5,horizon,shore,
-    barrel:{x:start.x+(end.x-start.x)*beach,y:start.y+(end.y-start.y)*beach+Math.sin(t*2.1)*6*(1-beach),rot:tip*1.35}};
+// The drifting barrel and the foreground water use the same wave height.
+function castawayWave(x, t, level, scale, swell) {
+  const distance = x / scale;
+  return level + swell * (Math.sin(distance * .042 - t * 3.1)
+    + .26 * Math.sin(distance * .074 + t * 2));
 }
-function drawBarrelProp(ctx,x,y,rot,scale=1) {
-  ctx.save();ctx.translate(x,y);ctx.rotate(rot);ctx.scale(scale,scale);barrel(ctx,0,23,1);ctx.restore();
+
+function castawayShoreX(w, h, y, island) {
+  const depth = (y - h * .68) / h;
+  const bend = (depth < 0 ? 5 : .85) * depth * depth;
+  return w * (1.18 - .46 * island - .46 * depth + bend);
 }
-function drawCastaway(ctx,w,h,t,client) {
-  const m=castawayMotion(w,h,t),coat=client.data.disguised?'#9c3d33':'#2d6b73';
-  const caption=(text)=>{ctx.save();ctx.textAlign='center';ctx.font='600 17px system-ui';const tw=ctx.measureText(text).width;ctx.fillStyle='rgba(10,14,18,.55)';ctx.fillRect(w/2-tw/2-14,h*.95-21,tw+28,30);ctx.fillStyle='#fff1cf';ctx.fillText(text,w/2,h*.95);ctx.restore();};
-  if(m.phase==='cell') {
-    ctx.fillStyle='#1d2523';ctx.fillRect(0,0,w,h);ctx.fillStyle='#2c2a26';ctx.fillRect(0,h*.72,w,h*.28);
-    for(let x=w*.15;x<w*.85;x+=w*.06)line(ctx,x,h*.18,x,h*.72,'#3e4c48',9);
-    ctx.save();ctx.translate(w*.5,h*.72);ctx.scale(2,2);lyingPerson(ctx,0,-6,coat);ctx.restore();
-    roundBox(ctx,w*.62,h*.68,16,24,4,'#7a4a24','#3b2412');
-    ctx.fillStyle=`rgba(0,0,0,${m.fade})`;ctx.fillRect(0,0,w,h);
-    caption('You swallow the pills and lie down on the cold floor…');return;
+
+function castawayMotion(w, h, t) {
+  const horizon = h * .45;
+  if (t < CASTAWAY_CELL_SECONDS) {
+    return {phase: 'cell', gateOpen: t >= 1.05, found: t >= 2.85,
+      fade: clamp((t - 4.55) / .45, 0, 1)};
   }
-  if(m.phase==='overboard') {
-    const sky=ctx.createLinearGradient(0,0,0,h);sky.addColorStop(0,'#08111f');sky.addColorStop(1,'#1d3446');ctx.fillStyle=sky;ctx.fillRect(0,0,w,h);
-    ctx.fillStyle='#f3e6c4';ctx.beginPath();ctx.arc(w*.82,h*.16,20,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='#10263a';ctx.fillRect(0,h*.62,w,h*.38);
-    const ship=cinematicShip(ctx,w*.82,h*.8,w*1.5,{night:1});
-    const rail=ship.point(700,200),drop=ship.point(-40,600);
-    const carryX=ship.point(1150,200).x+(rail.x-ship.point(1150,200).x)*m.carry,sc=ship.scale;
-    if(m.air<1)for(const o of [-36,36])person(ctx,carryX+o*sc*1.4,rail.y,true,t,'none','left',m.carry<1,false,'patrol',{color:o<0?'#617947':'#9c3d33'});
-    if(m.air===0)drawBarrelProp(ctx,carryX,rail.y-40*sc*1.6,0,sc*1.5);
-    else if(m.sink<1){const a=m.air,x=rail.x+(drop.x-rail.x)*a,y=rail.y-40*sc-120*sc*a+(drop.y-rail.y+120*sc)*a*a+m.sink*12;
-      ctx.save();ctx.globalAlpha=1-m.sink*.6;drawBarrelProp(ctx,x,y,a*2.4,sc*1.5);ctx.restore();}
-    if(m.splash>=0){ctx.strokeStyle=`rgba(220,235,240,${Math.max(0,.8-m.splash*.5)})`;ctx.lineWidth=2;for(const r of [1,1.8]){ctx.beginPath();ctx.ellipse(drop.x,drop.y,(20+m.splash*60)*r,(5+m.splash*14)*r,0,0,Math.PI*2);ctx.stroke();}}
-    caption(m.carry<1?'They think you are dead. They nail you into a barrel…':'"Over the side with him."');return;
+  if (t < CASTAWAY_DRIFT_START) {
+    const elapsed = t - CASTAWAY_CELL_SECONDS;
+    return {phase: 'overboard', carry: clamp(elapsed / 1.55, 0, 1),
+      air: clamp((elapsed - 1.55) / 1, 0, 1), splash: elapsed - 2.55};
   }
-  // Open sea with a sky that turns from day to night four times.
-  const mix=(a,b,f)=>a.map((x,i)=>Math.round(x+(b[i]-x)*f));
-  const day=[[118,170,199],[226,232,214]],night=[[6,12,30],[22,36,60]],storm=[[70,78,86],[118,124,124]];
-  let top,bottom;
-  if(m.phase==='adrift'){top=mix(mix(day[0],storm[0],m.storm),night[0],m.night);bottom=mix(mix(day[1],storm[1],m.storm),night[1],m.night);}
-  else {top=day[0];bottom=day[1];}
-  const sky=ctx.createLinearGradient(0,0,0,m.horizon);sky.addColorStop(0,`rgb(${top})`);sky.addColorStop(1,`rgb(${bottom})`);ctx.fillStyle=sky;ctx.fillRect(0,0,w,m.horizon+2);
-  if(m.phase==='adrift'&&m.night>0){ctx.save();ctx.globalAlpha=m.night;ctx.fillStyle='#fff3cf';for(let i=0;i<60;i++){ctx.beginPath();ctx.arc(((i*137+71)%997)/997*w,((i*73+29)%431)/431*m.horizon*.9,i%5===0?1.8:1,0,Math.PI*2);ctx.fill();}ctx.beginPath();ctx.arc(w*.2,h*.14,16,0,Math.PI*2);ctx.fill();ctx.restore();}
-  if(m.phase!=='adrift'||m.night<1){const sunY=m.phase==='adrift'?m.horizon-(m.horizon*.8)*Math.sin(Math.PI*clamp(m.f/.62,0,1)):m.horizon*.3,hot=m.phase==='adrift'&&m.day===3;
-    ctx.save();ctx.globalAlpha=1-(m.phase==='adrift'?Math.max(m.night,m.storm*.9):0);ctx.fillStyle=hot?'#fff2b0':'#ffe39c';ctx.beginPath();ctx.arc(w*.78,sunY,hot?38:26,0,Math.PI*2);ctx.fill();
-    if(hot){ctx.globalAlpha*=.25;ctx.beginPath();ctx.arc(w*.78,sunY,70,0,Math.PI*2);ctx.fill();}ctx.restore();}
-  const sea=mix([47,111,134],[9,22,40],m.phase==='adrift'?Math.max(m.night,m.storm*.5):0);
-  ctx.fillStyle=`rgb(${sea})`;ctx.fillRect(0,m.horizon,w,h-m.horizon);
-  const amp=m.phase==='adrift'?m.amp:5;
-  ctx.strokeStyle='rgba(225,238,238,.35)';ctx.lineWidth=2;
-  for(let row=0;row<10;row++){const y=m.horizon+8+row*row*4.2;ctx.beginPath();for(let x=-10;x<=w+10;x+=10){const yy=y+Math.sin(x*.02+t*(1.2+row*.1)+row)*amp*(.2+row*.08);x===-10?ctx.moveTo(x,yy):ctx.lineTo(x,yy);}ctx.stroke();}
-  if(m.phase==='adrift'&&m.storm>.05){
-    ctx.save();ctx.globalAlpha=m.storm;ctx.fillStyle='#4a5258';for(let i=0;i<6;i++){ctx.beginPath();ctx.ellipse(((i*211+(t*40))%(w+300))-150,h*.08+(i%3)*28,150,34,0,0,Math.PI*2);ctx.fill();}
-    ctx.strokeStyle='rgba(200,215,225,.45)';ctx.lineWidth=1.5;for(let i=0;i<90;i++){const x=((i*53+t*420)%(w+100))-50,y=((i*97+t*900)%h);line(ctx,x,y,x-6,y+16,'rgba(200,215,225,.45)',1.5);}
-    if(Math.sin(t*7.3)>.985){ctx.fillStyle='rgba(255,255,240,.55)';ctx.fillRect(0,0,w,h);}ctx.restore();}
-  if((m.phase==='adrift'&&m.day===4)||m.phase==='ashore')for(let i=0;i<3;i++){const gx=((i*240+t*55)%(w+200))-100,gy=h*.18+i*22+Math.sin(t*3+i)*8;line(ctx,gx-10,gy,gx,gy+5,'#f5f2ea',2.5);line(ctx,gx,gy+5,gx+10,gy,'#f5f2ea',2.5);}
-  if(m.phase==='ashore') {
-    const ix=w*1.15-(w*.6)*m.island;
-    ctx.fillStyle='#e9d6a0';ctx.beginPath();ctx.moveTo(ix-w*.75,h);ctx.quadraticCurveTo(ix-w*.55,m.shore-8,ix-w*.2,m.shore-24);ctx.lineTo(w+20,m.shore-30);ctx.lineTo(w+20,h);ctx.fill();
-    ctx.fillStyle='#4f7a3e';ctx.beginPath();ctx.ellipse(ix+w*.05,m.shore-26,w*.3,46,0,Math.PI,0);ctx.fill();
-    for(const [px,ph,lean] of [[-.08,150,-.15],[.06,175,.1],[.18,130,.22]]){ctx.save();ctx.translate(ix+w*px,m.shore-40);ctx.rotate(lean);line(ctx,0,0,6,-ph,'#6b4d30',9);
-      for(let i=0;i<6;i++){const a=-Math.PI*.95+i*Math.PI*.19+Math.sin(t*1.5+i)*.05;line(ctx,6,-ph,6+Math.cos(a)*60,-ph+Math.sin(a)*20+24,'#2f6b34',7);}ctx.restore();}
-    ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(0,m.shore+18+Math.sin(t*1.4)*6);ctx.quadraticCurveTo(w*.4,m.shore+4,w,m.shore+24);ctx.stroke();
+
+  const scale = Math.max(.1, Math.min(w / 1000, h / 560) * 2);
+  const level = h * .69;
+  const driftTime = t - CASTAWAY_DRIFT_START;
+  const driftX = seconds => w * (.43 + .009 * seconds);
+  if (t < CASTAWAY_SHORE_START) {
+    const day = Math.floor(driftTime / CASTAWAY_DAY_SECONDS) + 1;
+    const fraction = (driftTime % CASTAWAY_DAY_SECONDS) / CASTAWAY_DAY_SECONDS;
+    const night = Math.min(clamp((fraction - .53) / .17, 0, 1), clamp((1 - fraction) / .10, 0, 1));
+    const storm = day === 2 ? Math.sin(Math.PI * clamp(fraction / .9, 0, 1)) : 0;
+    const peekStart = [.24, 0, .68, .28][day - 1];
+    const peekTime = (fraction - peekStart) / .27;
+    const peek = day !== 2 && peekTime > 0 && peekTime < 1 ? Math.sin(Math.PI * peekTime) : 0;
+    const x = driftX(driftTime);
+    const swell = scale * (3 + storm * 8);
+    const waterline = castawayWave(x, t, level, scale, swell);
+    return {phase: 'adrift', day, fraction, night, storm, peek, horizon, scale, level, swell, waterline,
+      barrel: {x, y: waterline + 2 * scale, rot: Math.sin(t * 2.3) * (.13 + storm * .35)}};
   }
-  if(m.barrel){
-    const b=m.barrel;drawBarrelProp(ctx,b.x,b.y,b.rot,1.6);
-    if(m.phase==='ashore'&&m.out>0){const px=b.x-30-50*m.out,py=m.shore+30;
-      if(m.out<.6){ctx.save();ctx.translate(px,py);ctx.rotate(-1.2*(1-m.out/.6));person(ctx,0,0,false,t,'none','left',true,client.data.disguised);ctx.restore();}
-      else person(ctx,px,py,false,t,'none','left',false,client.data.disguised);}
+
+  const elapsed = t - CASTAWAY_SHORE_START;
+  const island = easeInOut(clamp(elapsed / 2.5, 0, 1));
+  const arrival = easeInOut(clamp((elapsed - .6) / 3, 0, 1));
+  const tip = easeInOut(clamp((elapsed - 3.6) / .7, 0, 1));
+  const crawl = clamp((elapsed - 4.3) / 2.25, 0, 1);
+  const shoreX = castawayShoreX(w, h, level, 1);
+  const startX = driftX(4 * CASTAWAY_DAY_SECONDS);
+  const x = startX + (shoreX - 17 * scale - startX) * arrival;
+  const swell = scale * (3 - 2 * arrival);
+  const waterline = castawayWave(x, t, level, scale, swell);
+  return {phase: 'ashore', island, arrival, crawl, shoreX, horizon, scale, level, swell, waterline,
+    barrel: {x, y: level + (waterline - level) * (1 - arrival) + 2 * scale,
+      rot: Math.sin(t * 2.3) * .13 * (1 - arrival) + tip * 1.32}};
+}
+
+function castawayGuards(data) {
+  const kinds = new Set(['patrol', 'cargo', 'sleeper', ...Object.keys(data.guard_routes)]);
+  return [...kinds].filter(kind => data[kind + '_alive']).slice(0, 2);
+}
+
+function drawCastawayCell(ctx, w, h, t, motion, data, coat) {
+  const floor = data.rules.floors.cell[2];
+  const x = data.position.zone === 'cell' ? data.position.value : data.rules.story_points.cell_floor.x;
+  const player = {x, y: floor};
+  const camera = cameraFor(player, w, h, 'cell');
+  background(ctx, w, h, camera.x, t);
+  ctx.save();
+  ctx.scale(camera.zoom, camera.zoom);
+  ctx.translate(-camera.x, -camera.y);
+  ship(ctx, data);
+  storyDecor(ctx, data);
+  lyingPerson(ctx, x, floor - 10, coat);
+  roundBox(ctx, x + 44, floor - 12, 6, 11, 2, '#87572d', '#412b20');
+
+  castawayGuards(data).forEach((kind, index) => {
+    const progress = clamp((t - .30 - index * .35) / 2.5, 0, 1);
+    const startX = 465 + index * 30;
+    const stopX = Math.min(x + 17, 323) + index * 34;
+    const guardX = startX + (stopX - startX) * progress;
+    const checking = index === 0 && motion.found;
+    const body = checking ? crouchingPerson : person;
+    body(ctx, guardX, floor, true, t, 'none', 'left', progress < 1,
+      false, kind, data.rules.guard_styles[kind]);
+  });
+  cellBars(ctx, motion.gateOpen || data.door_open);
+  if (motion.found) speechBubble(ctx, x + 45, floor - 108, "He's not breathing.");
+  ctx.restore();
+
+  const shade = ctx.createRadialGradient(w * .54, h * .63, h * .22, w * .54, h * .63, w * .67);
+  shade.addColorStop(0, 'rgba(8,16,25,0)');
+  shade.addColorStop(1, 'rgba(8,16,25,.62)');
+  ctx.fillStyle = shade;
+  ctx.fillRect(0, 0, w, h);
+  if (motion.fade) {
+    ctx.fillStyle = `rgba(0,0,0,${motion.fade})`;
+    ctx.fillRect(0, 0, w, h);
   }
-  if(m.phase==='adrift'){ctx.save();ctx.globalAlpha=clamp(Math.min(m.f*6,(1-m.f)*6),0,1);ctx.textAlign='center';ctx.font='700 34px Georgia, serif';ctx.fillStyle='#fff1cf';ctx.fillText(`Day ${m.day}`,w/2,h*.12);ctx.restore();}
-  caption(m.phase==='adrift'?(m.night>.5?['Your first night at sea. Water seeps through the staves.','The storm dies down in the dark.','Another night. Still no land.','The last night. You hear surf in the distance.'][m.day-1]:['The barrel drifts. You wake to the sound of waves.','A storm. The barrel spins in the waves.','Burning sun, no land in sight.','Seagulls. Land must be close…'][m.day-1]):m.out<.6?'On the fifth morning the waves wash you ashore…':'A deserted island. Nobody is here, but you are free.');
+}
+
+function drawBarrelProp(ctx, x, y, angle, scale, {open = false, peek = 0, coat, disguised, lookLeft} = {}) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.scale(scale, scale);
+  barrel(ctx, 0, 23);
+  ctx.beginPath();
+  ctx.ellipse(0, -23, 19, 6, 0, 0, Math.PI * 2);
+  ctx.fillStyle = open ? '#282321' : '#b38a54';
+  ctx.fill();
+  ctx.strokeStyle = '#513727';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  if (peek > 0) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(-24, -90, 48, 69);
+    ctx.clip();
+    ctx.translate(0, 17 * (1 - peek));
+    if (lookLeft) ctx.scale(-1, 1);
+    barrelLurker(ctx, 0, -21, peek * .84, null, coat,
+      disguised ? '#332c29' : '#263940', disguised ? '#dbb36e' : '#b5c9be');
+    ctx.restore();
+  }
+
+  ctx.beginPath();
+  ctx.ellipse(0, -23, 19, 6, 0, 0, Math.PI);
+  ctx.strokeStyle = '#d5a96c';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawCastawayCrawl(ctx, mouth, scale, progress, t, coat, disguised) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(mouth.x - 1, mouth.y - 38 * scale, 126 * scale, 82 * scale);
+  ctx.clip();
+  ctx.translate(mouth.x + (-30 + 70 * easeInOut(progress)) * scale, mouth.y + 13 * scale);
+  ctx.scale(scale, scale);
+  const stride = Math.sin(t * 13) * 5 * Math.sin(Math.PI * progress);
+  ctx.fillStyle = `rgba(69, 46, 28, ${.22 * progress})`;
+  ctx.beginPath();
+  ctx.ellipse(2, 1, 27, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  line(ctx, -10, -13, -20 - stride, -3, '#2d2927', 6);
+  line(ctx, -20 - stride, -3, -27 - stride, -1, '#241f1e', 5);
+  line(ctx, -5, -12, -9 + stride, -2, '#2d2927', 6);
+  line(ctx, -9 + stride, -2, -16 + stride, 0, '#241f1e', 5);
+  ctx.save();
+  ctx.rotate(-.16);
+  roundBox(ctx, -14, -24, 30, 17, 5, coat, '#2c2927');
+  ctx.restore();
+  line(ctx, 10, -18, 17, -8, coat, 6);
+  line(ctx, 17, -8, 27 + stride, -3, '#d0a173', 5);
+  ctx.fillStyle = '#d0a173';
+  ctx.beginPath();
+  ctx.arc(20, -24, 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#272622';
+  ctx.beginPath();
+  ctx.arc(24, -24, 1.3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = disguised ? '#332c29' : '#263940';
+  ctx.beginPath();
+  ctx.moveTo(7, -29);
+  ctx.lineTo(14, -36);
+  ctx.lineTo(21, -33);
+  ctx.lineTo(27, -36);
+  ctx.lineTo(33, -29);
+  ctx.fill();
+  line(ctx, 7, -29, 33, -29, disguised ? '#dbb36e' : '#b5c9be', 2);
+  ctx.restore();
+}
+
+function castawayBeach(ctx, w, h, t, motion) {
+  const coast = y => castawayShoreX(w, h, y, motion.island);
+  const top = h * .47;
+  const sand = (offset, color) => {
+    ctx.beginPath();
+    ctx.moveTo(w + 20, top);
+    for (let y = top; y < h + 12; y += 8) ctx.lineTo(coast(y) + offset, y);
+    ctx.lineTo(w + 20, h + 12);
+    ctx.fillStyle = color;
+    ctx.fill();
+  };
+  sand(0, '#c4a575');
+  sand(w * .035, '#eddaa5');
+  const inland = coast(h * .63) + w * .12;
+  ctx.fillStyle = '#557347';
+  ctx.beginPath();
+  ctx.ellipse(inland + w * .18, h * .64, w * .25, h * .11, -.22, Math.PI, Math.PI * 2);
+  ctx.fill();
+  const treeScale = motion.scale * .65;
+  for (const [offset, depth, height, lean] of [[.03, .66, 103, -.16], [.12, .63, 133, .09], [.21, .69, 112, .19]]) {
+    ctx.save();
+    ctx.translate(inland + offset * w, h * depth);
+    ctx.scale(treeScale, treeScale);
+    ctx.rotate(lean);
+    line(ctx, 0, 0, 6, -height, '#725137', 7);
+    for (let i = 0; i < 6; i++) {
+      const angle = -Math.PI * .95 + i * Math.PI * .19 + Math.sin(t * 1.5 + i) * .05;
+      const dx = Math.cos(angle) * 48;
+      const dy = Math.sin(angle) * 25;
+      ctx.beginPath();
+      ctx.moveTo(6, -height);
+      ctx.quadraticCurveTo(6 + dx * .6, -height + dy - 9, 6 + dx, -height + dy + 12);
+      ctx.strokeStyle = i % 2 ? '#396042' : '#4d7748';
+      ctx.lineWidth = 6;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  for (let edge = 0; edge < 2; edge++) {
+    ctx.beginPath();
+    for (let y = top; y <= h + 9; y += 5) {
+      const x = coast(y) - (3 + edge * 9 + Math.sin(y * .06 - t * 2.4) * 2) * motion.scale;
+      if (y === top) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = edge ? 'rgba(212,236,230,.29)' : 'rgba(247,251,232,.75)';
+    ctx.lineWidth = edge ? 2 : 3;
+    ctx.stroke();
+  }
+}
+
+function drawCastawayWaterBarrel(ctx, w, h, t, motion, coat, disguised) {
+  const {barrel: b, scale, level, swell} = motion;
+  const wave = x => castawayWave(x, t, level, scale, swell);
+  const onBeach = x => motion.phase === 'ashore' && x >= castawayShoreX(w, h, wave(x), motion.island);
+  const left = b.x - 52 * scale;
+  const right = b.x + 52 * scale;
+  ctx.save();
+  // Draw the barrel only above the front wave, or where it rests on the sand.
+  ctx.beginPath();
+  ctx.moveTo(left, 0);
+  ctx.lineTo(right, 0);
+  for (let x = right; x >= left - scale; x -= 1.5 * scale) ctx.lineTo(x, onBeach(x) ? h : wave(x));
+  ctx.closePath();
+  ctx.clip();
+  drawBarrelProp(ctx, b.x, b.y, b.rot, scale,
+    {open: true, peek: motion.peek, coat, disguised, lookLeft: motion.night > .5});
+  ctx.restore();
+
+  // Short arcs overlap the barrel at the waterline and trail it down-current.
+  for (const [start, end, offset, alpha] of [[-37, -8, 0, .8], [0, 34, 1, .78], [-42, 14, 8, .48], [-57, -9, 15, .28]]) {
+    ctx.beginPath();
+    let started = false;
+    for (let dx = start; dx <= end; dx += 2) {
+      const x = b.x + dx * scale;
+      if (onBeach(x)) break;
+      const y = wave(x) + offset * scale + Math.sin((dx - start) / (end - start) * Math.PI) * scale * 2;
+      if (!started) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      started = true;
+    }
+    ctx.strokeStyle = `rgba(224,246,231,${alpha * (1 - (motion.night || 0) * .55)})`;
+    ctx.lineWidth = scale * (offset ? 1 : 1.6);
+    ctx.stroke();
+  }
+  if (motion.crawl > 0) {
+    const mouth = {x: b.x + 23 * scale * Math.sin(b.rot), y: b.y - 23 * scale * Math.cos(b.rot)};
+    drawCastawayCrawl(ctx, mouth, scale * .83, motion.crawl, t, coat, disguised);
+  }
+}
+
+function drawCastaway(ctx, w, h, t, client) {
+  const motion = castawayMotion(w, h, t);
+  const {disguised} = client.data;
+  const coat = disguised ? '#9c3d33' : '#2d6b73';
+  const caption = text => {
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.font = '600 17px system-ui';
+    const width = Math.min(ctx.measureText(text).width, w - 40);
+    ctx.fillStyle = 'rgba(10,14,18,.65)';
+    ctx.fillRect((w - width) / 2 - 14, h * .95 - 21, width + 28, 30);
+    ctx.fillStyle = '#fff1cf';
+    ctx.fillText(text, w / 2, h * .95, width);
+    ctx.restore();
+  };
+  if (motion.phase === 'cell') {
+    drawCastawayCell(ctx, w, h, t, motion, client.data, coat);
+    caption(motion.found ? 'The guards find you on the cell floor.' : 'You swallow the pills and lie down…');
+    return;
+  }
+  if (motion.phase === 'overboard') {
+    const sky = ctx.createLinearGradient(0, 0, 0, h);
+    sky.addColorStop(0, '#08111f');
+    sky.addColorStop(1, '#1d3446');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#f3e6c4';
+    ctx.beginPath();
+    ctx.arc(w * .16, h * .16, 20, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#10263a';
+    ctx.fillRect(0, h * .62, w, h * .38);
+    const ship = cinematicShip(ctx, w * .92, h * .79, w * 1.24, {night: 1});
+    const rail = ship.point(700, 200);
+    const drop = {x: w * .20, y: h * .83};
+    const startX = ship.point(1150, 200).x;
+    const carryX = startX + (rail.x - startX) * motion.carry;
+    const scale = ship.scale * 1.5;
+    const guards = castawayGuards(client.data);
+    guards.forEach((kind, index) => {
+      const offset = (index - (guards.length - 1) / 2) * 64 * scale;
+      person(ctx, carryX + offset, rail.y, true, t, 'none', 'left',
+        motion.carry < 1, false, kind, client.data.rules.guard_styles[kind]);
+    });
+    if (motion.air === 0) {
+      drawBarrelProp(ctx, carryX, rail.y - 30 * scale, 0, scale);
+    } else if (motion.air < 1) {
+      const air = motion.air;
+      const startY = rail.y - 30 * scale;
+      const x = rail.x + (drop.x - rail.x) * air;
+      const y = startY + (drop.y - startY) * air * air - 90 * scale * air * (1 - air);
+      drawBarrelProp(ctx, x, y, air * 2.4, scale);
+    } else {
+      const splash = motion.splash;
+      ctx.strokeStyle = `rgba(220,235,240,${Math.max(0, .85 - splash * .55)})`;
+      ctx.lineWidth = 2;
+      for (const ring of [1, 1.65]) {
+        ctx.beginPath();
+        ctx.ellipse(drop.x, drop.y, (13 + splash * 43) * ring, (3 + splash * 11) * ring, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      if (splash < .55) {
+        for (const dx of [-1, -.62, .53, .94]) {
+          const x = drop.x + dx * (14 + splash * 70);
+          const y = drop.y - Math.sin(splash * Math.PI / .55) * (28 + Math.abs(dx) * 16);
+          line(ctx, x, y, x + dx * 5, y - 7, '#cfebea', 2);
+        }
+      }
+    }
+    caption(motion.carry < 1 ? 'They carry you out in a barrel…' : '“Over the side with him.”');
+    return;
+  }
+
+  const adrift = motion.phase === 'adrift';
+  const night = motion.night || 0;
+  const storm = motion.storm || 0;
+  const mix = (a, b, amount) => a.map((value, i) => Math.round(value + (b[i] - value) * amount));
+  const skyColor = (day, cloud, dark) => `rgb(${mix(mix(day, cloud, storm), dark, night)})`;
+  const sky = ctx.createLinearGradient(0, 0, 0, motion.horizon);
+  sky.addColorStop(0, skyColor([118, 170, 199], [70, 78, 86], [6, 12, 30]));
+  sky.addColorStop(1, skyColor([226, 232, 214], [118, 124, 124], [22, 36, 60]));
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, w, motion.horizon + 2);
+  if (night > 0) {
+    ctx.save();
+    ctx.globalAlpha = night;
+    ctx.fillStyle = '#fff3cf';
+    for (let i = 0; i < 60; i++) {
+      ctx.beginPath();
+      ctx.arc(((i * 137 + 71) % 997) / 997 * w, ((i * 73 + 29) % 431) / 431 * motion.horizon * .9,
+        i % 5 === 0 ? 1.8 : 1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.arc(w * .2, h * .14, 16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  if (night < 1) {
+    const sunY = adrift ? motion.horizon * (1 - .8 * Math.sin(Math.PI * clamp(motion.fraction / .65, 0, 1))) : motion.horizon * .36;
+    ctx.save();
+    ctx.globalAlpha = 1 - Math.max(night, storm * .9);
+    ctx.fillStyle = motion.day === 3 ? '#fff2b0' : '#ffe39c';
+    ctx.beginPath();
+    ctx.arc(w * .78, sunY, motion.day === 3 ? 38 : 26, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  const sea = ctx.createLinearGradient(0, motion.horizon, 0, h);
+  sea.addColorStop(0, skyColor([87, 149, 160], [69, 91, 103], [20, 38, 57]));
+  sea.addColorStop(1, skyColor([36, 101, 120], [29, 45, 63], [8, 22, 40]));
+  ctx.fillStyle = sea;
+  ctx.fillRect(0, motion.horizon, w, h - motion.horizon);
+  for (let row = 1; row <= 7; row++) {
+    const y = motion.horizon + (h - motion.horizon) * (row / 7) ** 1.9;
+    const spacing = w * (.095 + row * .012);
+    const length = spacing * (.29 + row * .05);
+    const offset = (t * (7 + row * 4) + row * 53) % spacing;
+    for (let x = -spacing; x <= w + spacing; x += spacing) {
+      const from = x + offset;
+      const curl = Math.sin(x * .02 - t * 2.7 + row) * (2 + row * storm);
+      ctx.beginPath();
+      ctx.moveTo(from, y + curl);
+      ctx.quadraticCurveTo(from + length * .54, y + curl - (1 + row * .3),
+        from + length, y + curl + row * .2);
+      ctx.strokeStyle = `rgba(226,244,232,${(.18 + row * .015) * (1 - night * .4)})`;
+      ctx.lineWidth = 1 + row * .22;
+      ctx.stroke();
+    }
+  }
+  if (motion.day === 4 || !adrift) {
+    for (let i = 0; i < 3; i++) {
+      const x = ((i * 240 + t * 55) % (w + 200)) - 100;
+      const y = h * .18 + i * 22 + Math.sin(t * 3 + i) * 8;
+      line(ctx, x - 10, y, x, y + 5, '#f5f2ea', 2.5);
+      line(ctx, x, y + 5, x + 10, y, '#f5f2ea', 2.5);
+    }
+  }
+  if (!adrift) castawayBeach(ctx, w, h, t, motion);
+  drawCastawayWaterBarrel(ctx, w, h, t, motion, coat, disguised);
+
+  if (storm > .05) {
+    ctx.save();
+    ctx.globalAlpha = storm;
+    ctx.fillStyle = '#4a5258';
+    for (let i = 0; i < 6; i++) {
+      ctx.beginPath();
+      ctx.ellipse(((i * 211 + t * 40) % (w + 300)) - 150, h * .08 + (i % 3) * 28, 150, 34, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    for (let i = 0; i < 90; i++) {
+      const x = ((i * 53 + t * 420) % (w + 100)) - 50;
+      const y = (i * 97 + t * 900) % h;
+      line(ctx, x, y, x - 6, y + 16, 'rgba(200,215,225,.45)', 1.5);
+    }
+    if (Math.sin(t * 7.3) > .985) {
+      ctx.fillStyle = 'rgba(255,255,240,.55)';
+      ctx.fillRect(0, 0, w, h);
+    }
+    ctx.restore();
+  }
+  if (adrift) {
+    ctx.save();
+    ctx.globalAlpha = clamp(Math.min(motion.fraction * 6, (1 - motion.fraction) * 6), 0, 1);
+    ctx.textAlign = 'center';
+    ctx.font = '700 34px Georgia, serif';
+    ctx.fillStyle = '#fff1cf';
+    ctx.fillText(`Day ${motion.day}`, w / 2, h * .12);
+    ctx.restore();
+    const dayLines = ['The barrel drifts on the open sea.', 'A storm rocks the barrel.', 'Burning sun, no land in sight.', 'Seagulls. Land must be close…'];
+    const nightLines = ['Your first night at sea.', 'The storm dies down in the dark.', 'Still no land.', 'You hear surf in the distance.'];
+    const words = (night > .5 ? nightLines : dayLines)[motion.day - 1];
+    caption(motion.peek > .45 && night > .5 ? 'You look out at the stars.' : words);
+  } else if (motion.arrival < 1) {
+    caption('The surf carries the barrel toward the beach…');
+  } else {
+    caption(motion.crawl < .25 ? 'The barrel catches at the water’s edge…' : 'You crawl onto the wet sand.');
+  }
 }
 function drawEnding(ctx,w,h,client) {
   const reduced=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches,elapsed=Math.max(0,(performance.now()-client.endingStartedAt)/1000);

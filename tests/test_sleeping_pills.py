@@ -215,15 +215,26 @@ def test_canvas_draws_the_same_meal_as_the_server():
 
 
 @pytest.mark.skipif(NODE is None, reason='Node runs the Canvas rules')
-def test_castaway_cutscene_drifts_four_days_and_washes_ashore():
-    result = canvas(r'''[1,5,6.2,9,12.6,16,19.5,23,26,27.9].map(t=>castawayMotion(1000,560,t))''', {})
-    phases = [m['phase'] for m in result]
-    assert phases == ['cell', 'overboard', 'overboard', 'adrift', 'adrift', 'adrift', 'adrift', 'ashore', 'ashore', 'ashore']
-    assert [m['day'] for m in result[3:7]] == [1, 2, 3, 4]
-    assert result[4]['storm'] > .5 and result[3]['storm'] == 0         # day two is the storm
-    final = result[-1]
-    assert final['island'] == 1 and final['tip'] == 1 and final['out'] > .9
-    assert abs(final['barrel']['y'] - final['shore']) < 1                # the barrel lies on the beach
+def test_castaway_cutscene_shows_discovery_four_days_and_a_shoreline_exit():
+    result = canvas(r'''[.5, 2, 3.8, 6, 9.3, 10.5, 14.8, 17.2, 20.3, 22.5, 25.5, 28.7, 30.1, 32]
+        .map(t => castawayMotion(1000, 560, t))''', {})
+    waiting, entering, found, thrown, *rest = result
+    assert [m['phase'] for m in result] == ['cell'] * 3 + ['overboard'] + ['adrift'] * 6 + ['ashore'] * 4
+    assert not waiting['gateOpen'] and entering['gateOpen']
+    assert not entering['found'] and found['found']
+    drift, shore = rest[:6], rest[6:]
+    assert {m['day'] for m in drift} == {1, 2, 3, 4}
+    assert drift[1]['peek'] > .5 and drift[1]['night'] == 0
+    assert drift[2]['storm'] > .5 and drift[2]['peek'] == 0
+    assert drift[4]['night'] > .5 and drift[4]['peek'] > .5
+    for m in drift:
+        assert abs(m['waterline'] - m['barrel']['y']) < 10 * m['scale']
+    arriving, stopped, crawling, finished = shore
+    assert arriving['island'] < 1 and arriving['crawl'] == 0
+    assert stopped['arrival'] == 1 and stopped['crawl'] == 0
+    assert 0 < crawling['crawl'] < 1 and finished['crawl'] == 1
+    assert stopped['barrel']['x'] == crawling['barrel']['x'] == finished['barrel']['x']
+    assert 0 < finished['shoreX'] - finished['barrel']['x'] < 20 * finished['scale']
 
 
 def test_new_actions_go_through_the_saved_game(tmp_path):
