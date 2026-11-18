@@ -25,6 +25,7 @@ from action_transport import handle_action
 from content import DOCUMENTS, ENDINGS, ITEMS, ROLES, STORY_POINTS
 import multiplayer as mp
 import shared_ship
+from journal import journal_hints
 
 
 ROOT = Path(__file__).resolve().parent
@@ -280,15 +281,27 @@ def main():
     st.markdown(
         """
         <style>
-        .block-container { max-width: 1160px; padding-top: 1.6rem; padding-bottom: 2rem; }
-        h1 { margin-bottom: .1rem; }
-        div[data-testid="stButton"] button { border-radius: .65rem; }
+        .stApp { background:radial-gradient(ellipse at 50% 0%,#1b3036 0%,#101b22 45%,#0b1218 100%); color:#e8ede8; }
+        .block-container { max-width:1200px; padding-top:1.6rem; padding-bottom:2rem; }
+        [data-testid="stHeader"] { background:transparent; }
+        [data-testid="stAppDeployButton"] { display:none; }
+        h1 { margin-bottom:.1rem; font-family:Georgia,serif; color:#f0e6d1; }
+        .pt-app-wordmark { display:flex; align-items:center; gap:10px; margin:0 0 10px; color:#d4ba86; font:750 11px/1.4 system-ui,sans-serif; letter-spacing:.2em; }
+        .pt-app-wordmark::before { content:""; width:22px; height:1px; background:#b99a60; }
+        div[data-testid="stButton"] button { border-radius:.6rem; background:#182c32; border:1px solid #365058; color:#e5e9df; }
+        [data-testid="stBaseButton-primary"] { background:#d8b679!important; border-color:#d8b679!important; color:#152429!important; }
+        [data-testid="stRadio"] [role="radiogroup"] { gap:18px; }
+        [data-testid="stExpander"] { border-color:#2d454d; border-radius:10px; }
+        [data-testid="stCaptionContainer"] { color:#acbbb8; }
         </style>
         """,
         unsafe_allow_html=True,
     )
-    st.title("🏴‍☠️ Team Plot Twist: Escape from the pirate ship")
-    st.caption("Six ways to freedom · Explore, find clues and choose your escape.")
+    if st.session_state.get("playing"):
+        st.markdown('<div class="pt-app-wordmark">THE VOYAGE · TEAM PLOT TWIST</div>', unsafe_allow_html=True)
+    else:
+        st.title("Team Plot Twist")
+        st.caption("Escape from the pirate ship · Six ways to freedom.")
 
     if "playing" not in st.session_state:
         st.session_state.playing = False
@@ -396,15 +409,12 @@ def main():
         sync_browser_backup(player_id, saved)
         return
 
-    st.markdown(
-        "**Controls:** `A` / `D` or `←` / `→` walk · `W` / `↑` climb · `↓` descend · `E` steal/take/ambush · `F` inspect/use/hide · `I` inventory · `L` lamp · `J` journal · `B` whistle · `R` shoot · `T` bribe · `Space` crouch/stand"
-    )
-    st.caption("Controls work while the game is visible. Click the game area to focus it.")
     bright_view = st.toggle("Brighter view", key="bright_view", help="Brighten the ship for better visibility.")
 
     progress = story_progress(saved)
     data = {**asdict(saved),
         "story": progress,
+        "journal_hints": journal_hints(saved, int(time.time() * 1000)),
         "documents": DOCUMENTS,
         "endings": ENDINGS,
         "roles": ROLES,
@@ -478,33 +488,34 @@ def main():
     if not room:
         sync_browser_backup(player_id, current)
     if current is not None:
-        inventory, doorway, place = st.columns(3)
-        items = []
-        if current.has_key: items.append("🗝️ Cell")
-        if current.has_blue_key: items.append("🔵 Chest")
-        if current.has_pistol: items.append("🔫 Pistol")
-        if current.has_lamp: items.append("🏮 Lamp")
-        if current.disguised and not story_progress(current).get("voyage",{}).get("captain_worn"): items.append("🥼 Uniform")
-        for item in story_progress(current)["items"]:
-            items.append(ITEMS[item]["icon"] + " " + ITEMS[item]["name"])
-        inventory.caption("Inventory: " + (" · ".join(items) if items else "Empty"))
-        doorway.caption("Cell door: " + ("Open" if current.door_open else "Locked"))
-        names = {
-            "cell": "Cell",
-            "hold": "Hold",
-            "lower_stair": "Lower stairs",
-            "mid": "Middle deck",
-            "cabin": "Cabin",
-            "hammock": "Upper hammock",
-            "dining": "Mess hall",
-            "chest_room": "Chest room",
-            "upper_deck": "Upper deck",
-            "upper_stair": "Upper stairs",
-            "kitchen": "Galley",
-            "mast": "Mast", "mast_top": "Mast top",
-        }
-        names.update({zone: info[0].capitalize() for zone, info in MAP_CONFIG["rooms"].items()})
-        place.caption("Location: " + names.get(current.position.zone, "Ship"))
+        with st.expander("Game details", expanded=False):
+            inventory, doorway, place = st.columns(3)
+            items = []
+            if current.has_key: items.append("🗝️ Cell")
+            if current.has_blue_key: items.append("🔵 Chest")
+            if current.has_pistol: items.append("🔫 Pistol")
+            if current.has_lamp: items.append("🏮 Lamp")
+            if current.disguised and not story_progress(current).get("voyage",{}).get("captain_worn"): items.append("🥼 Uniform")
+            for item in story_progress(current)["items"]:
+                items.append(ITEMS[item]["icon"] + " " + ITEMS[item]["name"])
+            inventory.caption("Inventory: " + (" · ".join(items) if items else "Empty"))
+            doorway.caption("Cell door: " + ("Open" if current.door_open else "Locked"))
+            names = {
+                "cell": "Cell",
+                "hold": "Hold",
+                "lower_stair": "Lower stairs",
+                "mid": "Middle deck",
+                "cabin": "Cabin",
+                "hammock": "Upper hammock",
+                "dining": "Mess hall",
+                "chest_room": "Chest room",
+                "upper_deck": "Upper deck",
+                "upper_stair": "Upper stairs",
+                "kitchen": "Galley",
+                "mast": "Mast", "mast_top": "Mast top",
+            }
+            names.update({zone: info[0].capitalize() for zone, info in MAP_CONFIG["rooms"].items()})
+            place.caption("Location: " + names.get(current.position.zone, "Ship"))
 
 
 if __name__ == "__main__":

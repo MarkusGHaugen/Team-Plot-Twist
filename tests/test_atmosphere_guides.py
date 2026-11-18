@@ -104,7 +104,7 @@ def test_guide_save_rejects_incomplete_or_impossible_motion():
 
 
 def test_music_uses_one_player_pair_and_cleans_up_its_scheduler():
- from test_canvas_rules import canvas
+ from test_canvas_rules import require_node
  expression=r'''(async()=>{
   let contexts=0,cleared=0,clock=1000,callback;
   globalThis.Date={now:()=>clock};globalThis.document={hidden:false};globalThis.URL=class {constructor(path){this.href=path;}};
@@ -123,7 +123,7 @@ def test_music_uses_one_player_pair_and_cleans_up_its_scheduler():
  from pathlib import Path
  source=Path('game_component/game.js').read_text().replace('export default function','function mount')
  runner="const vm=require('vm'),v=JSON.parse(require('fs').readFileSync(0,'utf8')),c={};vm.createContext(c);vm.runInContext(v.source,c);Promise.resolve(vm.runInContext(v.expression,c)).then(r=>console.log(JSON.stringify(r))).catch(e=>{console.error(e);process.exitCode=1});"
- result=json.loads(subprocess.run([shutil.which('node'),'-e',runner],input=json.dumps({'source':source,'expression':expression}),text=True,capture_output=True,check=True).stdout)
+ result=json.loads(subprocess.run([require_node(),'-e',runner],input=json.dumps({'source':source,'expression':expression}),text=True,capture_output=True,check=True).stdout)
  assert result=={'before':False,'same':True,'contexts':2,'explore':'explore','alert':'alert','off':True,'abandoned':True,'cleared':2}
 
 
