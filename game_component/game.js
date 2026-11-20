@@ -2353,6 +2353,17 @@ function storyDecor(ctx,d,position=d.position) {
       for(let i=0;i<3;i++) line(ctx,x-10,y-20+i*5,x+(i===2?3:7),y-20+i*5,'#756645',1);
       ctx.fillStyle='#a1513d';ctx.beginPath();ctx.arc(x+10,y-9,2.5,0,Math.PI*2);ctx.fill();
       label(ctx,id==='opening_letter'?'LETTER':id==='manifest_desk'?'MANIFEST':'JOURNAL',x-29,y-35,9);
+    } else if(p.kind==='painting') {
+      // Hang the seascape just left of the provisions doorway.
+      ctx.save();ctx.translate(7,0);
+      roundBox(ctx,x-23,y-91,46,32,2,'#b88a50','#493324');
+      ctx.fillStyle='#e4bc78';ctx.fillRect(x-19,y-87,38,24);
+      ctx.fillStyle='#618b91';ctx.fillRect(x-19,y-75,38,12);
+      ctx.fillStyle='#f5d79a';ctx.beginPath();ctx.arc(x+9,y-81,4,0,Math.PI*2);ctx.fill();
+      line(ctx,x-6,y-78,x-6,y-68,'#493a2c',1.5);
+      ctx.fillStyle='#f3e6c6';ctx.beginPath();ctx.moveTo(x-5,y-77);ctx.lineTo(x+1,y-70);ctx.lineTo(x-5,y-70);ctx.fill();
+      line(ctx,x-11,y-68,x+2,y-68,'#493a2c',2);
+      ctx.restore();
     } else if(p.kind==='window') {
       roundBox(ctx,x-26,y-81,52,38,13,'#5995a2','#dbbb7c');
       line(ctx,x-22,y-62,x+22,y-62,'#d7bb83',3);line(ctx,x,y-78,x,y-46,'#d7bb83',3);
