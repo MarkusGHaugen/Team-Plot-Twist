@@ -48,6 +48,36 @@ def test_recordings_switch_reset_loop_and_survive_rerenders():
  })()''')
  assert result==dict(count=2,resumed=True,alert=True,continuous=True,clipped=True,reset=True,newGame=True,hidden=True,visible=True,stopped=True,url='https://example.com/~/+/app/static/music/exploration-v1.ogg')
 
+def test_rescue_restarts_the_cheerful_track():
+ result=async_canvas('(async()=>{'+MOCK+r'''
+ const m=musicEngine();m.touch(calm);
+ m.touch({...calm,ending:'castaway',finale:{status:'won'}},false,0,false,false,true);
+ return {enabled:m.enabled,mode:m.mode,time:m.tracks.explore.currentTime,playing:!m.tracks.explore.paused};
+ })()''')
+ assert result==dict(enabled=True,mode='explore',time=0,playing=True)
+
+def test_beach_celebration_starts_cheerful_music_automatically_then_turns_dramatic():
+ result=async_canvas('(async()=>{'+MOCK+r'''
+ const m=musicEngine();
+ const cell={enabled:m.enabled,tracks:m.tracks};
+ m.touch({...calm,ending:'castaway',finale:{status:'active'}},false,0,false,true,false);
+ const beach={enabled:m.enabled,mode:m.mode,playing:!m.tracks.explore.paused};
+ m.touch({...calm,ending:'castaway',finale:{status:'active'}},false,0,true,false,false);
+ const twist={mode:m.mode,dramatic:!m.tracks.alert.paused,cheerfulPaused:m.tracks.explore.paused};
+ m.touch({...calm,ending:'castaway',finale:{status:'won'}},false,0,false,false,true);
+ return {cell,beach,twist,rescue:{mode:m.mode,cheerful:!m.tracks.explore.paused,dramaticPaused:m.tracks.alert.paused}};
+ })()''')
+ assert result==dict(cell=dict(enabled=False,tracks=None),beach=dict(enabled=True,mode='explore',playing=True),twist=dict(mode='alert',dramatic=True,cheerfulPaused=True),rescue=dict(mode='explore',cheerful=True,dramaticPaused=True))
+
+def test_replacing_music_engine_stops_the_previous_players():
+ result=async_canvas('( ()=>{'+MOCK+r'''
+ let stopped=0;
+ globalThis.__teamPlotTwistMusic={version:6,enabled:true,timer:null,stop(){stopped++;},ctx:null};
+ const current=musicEngine();
+ return {version:current.version,stopped,oldEnabled:globalThis.__teamPlotTwistMusic.enabled};
+ })()''')
+ assert result==dict(version=7,stopped=1,oldEnabled=False)
+
 def test_failed_playback_turns_off_and_reports_error():
  result=async_canvas('(async()=>{'+MOCK+r'''
  Audio.prototype.play=()=>Promise.reject(new Error('blocked'));

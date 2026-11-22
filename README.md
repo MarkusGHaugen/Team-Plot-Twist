@@ -34,7 +34,7 @@ Choose **Single player** or **Multiplayer** above the game. In multiplayer one p
 
 ## The last escape
 
-Each of the six escape routes ends with its own scene, followed automatically by the mandatory cannon finale. The finale is the last scene of that route and does not change which ending you reached. The music starts happily on the beach, then turns ominous as guard boats appear. Dodge ten cannonballs: **W / ↑** jumps low shots and **Space / S / ↓** ducks high ones. You have three lives. Win, and the dog from the intro arrives in a small boat for the rescue epilogue, "Free at last"; your original ending remains recorded. If the guards catch you, choose **Try again** for a new volley. The game never resets automatically. **New Game** asks for confirmation before replacing your save. Details are in [specs/cannon-finale.md](specs/cannon-finale.md).
+Each of the six escape routes ends with its own scene, followed automatically by the mandatory cannon finale. The finale is the last scene of that route and does not change which ending you reached. Cheerful music plays as you celebrate on the beach, then cuts to the dramatic guard theme when the plot twist text reveals the guards are back. Dodge ten cannonballs fired about once a second: **W / ↑** jumps low shots and **Space / S / ↓** ducks high ones. You have three lives. Win, and cheerful music starts for the dog’s arrival in a small boat and the rescue epilogue, "Free at last"; your original ending remains recorded. If the guards catch you, choose **Try again** for a new volley. The game never resets automatically. **New Game** asks for confirmation before replacing your save. Details are in [specs/cannon-finale.md](specs/cannon-finale.md).
 
 ## Things to do aboard
 

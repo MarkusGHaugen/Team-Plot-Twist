@@ -68,7 +68,8 @@ STORY_POINTS = {'opening_letter': {'zone': 'cell', 'x': 205.0, 'reach': 48.0, 'n
 
 DOCUMENTS = {'opening_letter': {'title': 'You are not the only one who wants to leave',
                     'kicker': 'LETTER IN THE CELL',
-                    'body': 'They locked you up because you saw the captain falsifying the cargo manifests. '
+                    'body': 'I saw the captain’s men haul you from the water after you jumped in to save your dog. '
+                            'He had you locked up because you saw him falsifying the cargo manifests. '
                             'At the next port, he plans to silence the witness.\n'
                             '\n'
                             'I cannot open your door. But the guard carries a key when he passes the stairs. '

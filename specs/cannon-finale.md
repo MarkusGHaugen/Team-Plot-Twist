@@ -5,14 +5,15 @@ Acceptance notes. Written before any code, as `AGENTS.md` asks. Numbers in **bol
 ## The story beat
 
 - Any of the six escape endings plays its existing scene, then cuts to a shared beach scene: the player stands on the sand and celebrates being free.
-- The exploration music plays during the first part of the celebration. It turns dark and dramatic as guard boats appear far offshore and approach with cannons.
+- Cheerful exploration music plays while the player celebrates being free on the beach. It cuts to the dark, dramatic guard theme exactly when the **"PLOT TWIST: THE GUARDS ARE BACK!"** text appears.
+- After the final cannonball is dodged, the cheerful exploration track starts automatically, even if music was off during play, as the dog arrives to rescue the player.
 - After the beach reveal, the player has to dodge **10** cannonballs. On a win, a small boat arrives with the dog from the intro. This is the rescue epilogue of the reached route, not another ending.
 - On a loss, show **"Caught by the cannons!"** and a **Try again** button. Retrying starts a fresh volley; it does not reset the game.
 
 ## Rules (the server decides all of these)
 
 1. After one of the six existing escape routes and its original ending scene, the page starts the shared beach celebration and then the cannon finale automatically. A finale request cannot be started from anywhere else, and a rejected request changes nothing in the save.
-2. The finale has a fixed volley of **10** cannonballs. Each ball has a lane (**high** or **low**) and an arrival time. The order is decided by the server from a stored seed, so the same save always replays the same volley.
+2. The finale has a fixed volley of **10** cannonballs, fired about **1 second apart** (with a little timing jitter). Each ball has a lane (**high** or **low**) and an arrival time. The order is decided by the server from a stored seed, so the same save always replays the same volley.
 3. A **low** ball must be jumped (W / Up). A **high** ball must be ducked (Space / Down). Doing the wrong move, or nothing, is a hit.
 4. The player has **3** lives. A hit removes one life. At 0 lives the finale is lost and the player can start a new volley with Try again.
 5. The counter shows cannonballs left, from 10 down to 0. It never goes below 0 and never changes except when a ball has been resolved (dodged or hit).
@@ -74,7 +75,7 @@ Acceptance notes. Written before any code, as `AGENTS.md` asks. Numbers in **bol
 ## Decisions taken (change them if the group disagrees)
 
 - Endings that trigger it: **all six**. The finale starts a few seconds after the ending's own scene ends.
-- Lives: **3**. Volley: **10 balls over about 38 seconds**, with a small random jitter in the timing that the server fixes with the seed.
+- Lives: **3**. Volley: **10 balls over about 20.5 seconds**, with a small random jitter in the timing that the server fixes with the seed.
 - On a loss: show the caught screen and let the player retry the cannon volley without resetting the game.
 - Multiplayer: the ship is shared, so the finale is shared. Both players see the same volley and play it on their own screens; whoever's report reaches the server first decides the result for both.
 - Known limit: the server judges the moves the page reports and checks the timing window and that enough time has passed, but it cannot see the keyboard. A player who edits the page could send perfect moves. That is acceptable for a class game; the rules and saves are still validated on the server.

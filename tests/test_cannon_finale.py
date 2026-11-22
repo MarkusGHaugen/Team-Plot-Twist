@@ -401,13 +401,32 @@ def test_canvas_finale_constants_match_the_server():
                   'windowBefore': finale.WINDOW_BEFORE_MS, 'windowAfter': finale.WINDOW_AFTER_MS}
 
 
+def test_cannonballs_are_spaced_about_one_second_apart():
+    assert finale.GAP_MS == 1000
+    assert finale.END_MS == 20_500
+
+
 @pytest.mark.skipif(NODE is None, reason='Node is needed to execute the actual Canvas rules')
 def test_beach_music_switches_from_celebration_to_the_guard_theme():
     data = {'ending': 'castaway', 'finale': {'status': 'active'}}
     assert canvas('finaleCelebrationNow(input.data,{t:1000})', {'data': data})
-    assert not canvas('finaleDarkNow(input.data,{t:2599})', {'data': data})
-    assert canvas('finaleDarkNow(input.data,{t:2600})', {'data': data})
-    assert not canvas('finaleCelebrationNow(input.data,{t:2600})', {'data': data})
+    assert not canvas('finaleDarkNow(input.data,{t:6699})', {'data': data})
+    assert canvas('finaleDarkNow(input.data,{t:6700})', {'data': data})
+    assert canvas('finaleCelebrationNow(input.data,{t:6699})', {'data': data})
+    assert not canvas('finaleCelebrationNow(input.data,{t:6700})', {'data': data})
+
+
+@pytest.mark.skipif(NODE is None, reason='Node is needed to execute the actual Canvas rules')
+def test_rescue_restores_cheerful_music_and_names_the_plot_twist():
+    data = {'ending': 'castaway', 'finale': {'status': 'won'}}
+    assert canvas('finaleRescueNow(input.data)', {'data': data})
+    assert not canvas('finaleRescueNow(input.data)', {'data': {'ending':'castaway','finale':{'status':'active'}}})
+    source = __import__('pathlib').Path('game_component/game.js').read_text()
+    assert 'PLOT TWIST: THE GUARDS ARE BACK!' in source
+    assert 'You thought you were free…' in source
+    from content import DOCUMENTS
+    assert 'after you jumped in to save your dog' in DOCUMENTS['opening_letter']['body']
+    assert 'falsifying the cargo manifests' in DOCUMENTS['opening_letter']['body']
 
 
 @pytest.mark.skipif(NODE is None, reason='Node is needed to execute the actual Canvas rules')

@@ -16,9 +16,9 @@ const ZONE_NAMES = {
 
 function musicEngine() {
   const previous=globalThis.__teamPlotTwistMusic;
-  if(previous?.version===4)return previous;
-  if(previous){previous.enabled=false;if(previous.timer)clearInterval(previous.timer);previous.ctx?.close?.();}
-  const m={version:4,enabled:false,volume:.22,mode:'explore',timer:null,lastTouch:0,runId:null,active:null,error:'',tracks:null,sfxCtx:null};
+  if(previous?.version===7)return previous;
+  if(previous){previous.enabled=false;previous.stop?.();if(previous.timer)clearInterval(previous.timer);previous.ctx?.close?.();}
+  const m={version:7,enabled:false,volume:.22,mode:'explore',timer:null,lastTouch:0,runId:null,active:null,error:'',tracks:null,sfxCtx:null,sceneMusicStarted:false};
   try {const saved=Number(localStorage.getItem('team-pt-music-volume')??.22);if(Number.isFinite(saved))m.volume=Math.max(0,Math.min(.6,saved));}catch(_){}
   m.ensureTracks=()=>{
     if(m.tracks)return;
@@ -56,12 +56,19 @@ function musicEngine() {
       const plop=ac.createOscillator(),pg=ac.createGain();plop.type='sine';plop.frequency.setValueAtTime(210,ac.currentTime);plop.frequency.exponentialRampToValueAtTime(65,ac.currentTime+.19);pg.gain.setValueAtTime(Math.max(.01,m.volume*.38),ac.currentTime);pg.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.2);plop.connect(pg);pg.connect(ac.destination);plop.start();plop.stop(ac.currentTime+.21);
     }catch(_){}
   };
-  m.touch=(data,introActive=false,introTime=0,finaleDark=false,finaleCelebration=false)=>{
+  m.touch=(data,introActive=false,introTime=0,finaleDark=false,finaleCelebration=false,finaleRescue=false)=>{
     m.lastTouch=Date.now();const run=String(data.run_id??'');
     if(m.runId!==run){m.runId=run;m.error='';if(m.tracks)for(const audio of Object.values(m.tracks))audio.currentTime=0;}
+    const finaleSceneMusic=finaleCelebration||finaleRescue;
+    if(finaleSceneMusic&&!m.sceneMusicStarted){
+      m.ensureTracks();m.enabled=true;m.error='';
+      if(m.tracks)m.tracks.explore.currentTime=0;
+      if(!m.timer)m.timer=setInterval(()=>{if(Date.now()-m.lastTouch>2000){m.enabled=false;m.stop();}else m.sync();},250);
+    }
+    m.sceneMusicStarted=finaleSceneMusic;
     const tense=data.capture_phase==='active'||gameNow(data)<data.alert_until_ms||(data.story?.voyage?.armed&&(data.sleeper_alive||Object.keys(data.guard_routes||{}).some(k=>data[k+'_alive'])));
-    const mode=finaleDark?'alert':finaleCelebration?'explore':data.ending?'ending':introActive?(introTime>=15.3?'alert':'explore'):tense?'alert':'explore';
-    if(mode!==m.mode){if(mode==='alert'&&m.tracks)m.tracks.alert.currentTime=0;if(mode==='explore'&&data.finale?.status==='lost'&&m.tracks)m.tracks.explore.currentTime=0;m.mode=mode;}
+    const mode=finaleRescue?'explore':finaleDark?'alert':finaleCelebration?'explore':data.ending?'ending':introActive?(introTime>=15.3?'alert':'explore'):tense?'alert':'explore';
+    if(mode!==m.mode){if(mode==='alert'&&m.tracks)m.tracks.alert.currentTime=0;if(mode==='explore'&&m.tracks&&(finaleRescue||data.finale?.status==='lost'))m.tracks.explore.currentTime=0;m.mode=mode;}
     m.sync();
   };
   m.toggle=async()=>{
@@ -1562,7 +1569,7 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
   introSkip.addEventListener('click',skipIntro);
   const music=musicEngine(),musicButton=parentElement.querySelector('.pt-music-button'),volume=parentElement.querySelector('.pt-music-volume');
   async function toggleMusic(){await music.toggle();stage.focus({preventScroll:true});}
-  function changeVolume(){music.volume=Number(volume.value);try{localStorage.setItem('team-pt-music-volume',String(music.volume));}catch(_){}const p=introProgress(client);music.touch(client.data,p!==null,p??0,finaleDarkNow(client.data,client.fin),finaleCelebrationNow(client.data,client.fin));}
+  function changeVolume(){music.volume=Number(volume.value);try{localStorage.setItem('team-pt-music-volume',String(music.volume));}catch(_){}const p=introProgress(client);music.touch(client.data,p!==null,p??0,finaleDarkNow(client.data,client.fin),finaleCelebrationNow(client.data,client.fin),finaleRescueNow(client.data));}
   musicButton.addEventListener('click',toggleMusic);volume.addEventListener('input',changeVolume);volume.value=music.volume;
   introMusicButton.addEventListener('click',toggleMusic);
   renderStoryPanels(parentElement,client);
@@ -1755,7 +1762,7 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
     lastFrameAt = now;
     if(client.actionInFlight&&client.inFlightPayload&&now-client.lastDeliveryAt>1500)deliver(client.inFlightPayload);
     const introTime=introProgress(client,now);
-    music.touch(client.data,introTime!==null,introTime??0,finaleDarkNow(client.data,client.fin),finaleCelebrationNow(client.data,client.fin));
+    music.touch(client.data,introTime!==null,introTime??0,finaleDarkNow(client.data,client.fin),finaleCelebrationNow(client.data,client.fin),finaleRescueNow(client.data));
     if(introTime!==null&&introTime>=9.9&&!client.introSplashPlayed){client.introSplashPlayed=true;music.playSplash();}
     if(music.error&&music.error!==client.musicError){client.flashText=music.error;client.flashUntil=now+6000;}client.musicError=music.error;
     musicButton.textContent=music.enabled?'Music: on ♫':'Music: off ♫';musicButton.setAttribute?.('aria-pressed',String(music.enabled));
@@ -2732,12 +2739,12 @@ function drawEnding(ctx,w,h,client) {
 // ---- Cannon finale ------------------------------------------------------------------------
 // After an ending the guards come back with cannons. The page plays the volley the server chose
 // and reports the player's moves; the server judges them. Keep these numbers equal to finale.py.
-const FINALE={balls:10,lives:3,endMs:43900,windowBefore:500,windowAfter:250};
+const FINALE={balls:10,lives:3,endMs:20500,windowBefore:500,windowAfter:250};
 const FINALE_TRAVEL_MS=1500;
 const FINALE_MAX_MOVES=120;
 const RESCUE_SECONDS=9;
 const BEACH_CELEBRATION_MS=8500;
-const BEACH_MUSIC_SWITCH_MS=2600;
+const BEACH_MUSIC_SWITCH_MS=BEACH_CELEBRATION_MS-1800;
 const CAPTURE_SCENE_MS=6500;
 function finaleCaughtReady(data,fin){return Boolean(data.finale?.status==='lost'&&fin&&fin.captureT>=CAPTURE_SCENE_MS);}
 function finaleBallResult(ball,moves){
@@ -2756,6 +2763,7 @@ function finaleDarkNow(data,fin){
 function finaleCelebrationNow(data,fin){
   return Boolean(data.ending&&data.finale?.status==='active'&&fin&&fin.t<BEACH_MUSIC_SWITCH_MS);
 }
+function finaleRescueNow(data){return Boolean(data.ending&&data.finale?.status==='won');}
 function finaleStep(client,now){
   const f=client.data.finale;
   if(!f){client.fin=null;client.finaleWonAt=null;client.captureReturnStartedAt=null;client.captureReturnSent=false;return null;}
@@ -2835,8 +2843,8 @@ function drawBeachTwist(ctx,w,h,t){
   ctx.textAlign='center';
   if(t<BEACH_MUSIC_SWITCH_MS)label(ctx,'FREE AT LAST!',w*.52,h*.18,Math.max(23,38*unit));
   else if(t<BEACH_CELEBRATION_MS-1800)label(ctx,'The horizon darkens…',w*.52,h*.18,Math.max(18,27*unit));
-  else label(ctx,'THE GUARDS ARE BACK',w*.52,h*.18,Math.max(20,31*unit));
-  if(t>BEACH_MUSIC_SWITCH_MS+1100)label(ctx,'Ships on the horizon…',w*.52,h*.24,Math.max(12,17*unit));
+  else label(ctx,'PLOT TWIST: THE GUARDS ARE BACK!',w*.52,h*.18,Math.max(18,28*unit));
+  if(t>BEACH_MUSIC_SWITCH_MS+1100)label(ctx,t<BEACH_CELEBRATION_MS-1800?'You thought you were free…':'They found you again!',w*.52,h*.24,Math.max(12,17*unit));
   ctx.textAlign='left';
 }
 function drawCapturedReturn(ctx,w,h,t){

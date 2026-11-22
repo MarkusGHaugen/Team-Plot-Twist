@@ -14,8 +14,8 @@ from content import ENDINGS
 LIVES = 3
 BALLS = 10
 FIRST_AT_MS = 10_000        # leaves time for the beach celebration and guard reveal
-GAP_MS = 3600               # time between balls (before a little jitter)
-JITTER_MS = 300
+GAP_MS = 1000               # rapid volley: about one second between cannonballs
+JITTER_MS = 100             # keep adjacent dodge windows separate
 END_MS = FIRST_AT_MS + (BALLS - 1) * GAP_MS + 1500
 WINDOW_BEFORE_MS = 500      # a move this long before the ball arrives still dodges it
 WINDOW_AFTER_MS = 250       # and this long after
