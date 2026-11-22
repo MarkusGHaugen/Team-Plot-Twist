@@ -13,7 +13,7 @@ uv sync --locked
 uv run streamlit run app.py --server.port 8535
 ```
 
-Open **http://localhost:8535**. To preview an escape ending and its cannon plot twist, start with `TEAM_PLOT_TWIST_DEV=1` (for example `TEAM_PLOT_TWIST_DEV=1 uv run streamlit run app.py --server.port 8535`); a **Play escape ending → plot twist** button appears next to New Game. It only appears in a local development run and uses an isolated save. On a Mac you can also run `run-team.command`; on Windows run `run-team.bat` after installing uv.
+Open **http://localhost:8535**. On a Mac you can also run `run-team.command`; on Windows run `run-team.bat` after installing uv.
 
 ```bash
 uv run pytest -q

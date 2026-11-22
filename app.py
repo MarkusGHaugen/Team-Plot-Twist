@@ -55,16 +55,6 @@ def read_progress(player_id: str, browser_backup=None):
         return state
 
 
-def dev_tools_enabled() -> bool:
-    """Local testing only. Set TEAM_PLOT_TWIST_DEV=1 as an environment variable or as a Streamlit secret."""
-    if os.environ.get("TEAM_PLOT_TWIST_DEV") == "1":
-        return True
-    try:
-        return str(st.secrets.get("TEAM_PLOT_TWIST_DEV", "")) == "1"
-    except Exception:
-        return False
-
-
 def begin_play(state=None, epoch_ms=None, show_intro=False):
     st.session_state.playing = True
     st.session_state.confirm_new = False
@@ -309,9 +299,6 @@ def main():
         st.session_state.browser_backup = None
     if "browser_storage_available" not in st.session_state:
         st.session_state.browser_storage_available = True
-    if "demo_mode" not in st.session_state:
-        st.session_state.demo_mode = False
-
     identity = browser_identity_component()(
         data={"request_identity": "player_id" not in st.session_state},
         on_identity_change=lambda: None,
@@ -348,15 +335,10 @@ def main():
         if multiplayer_lobby(player_id, api_key):
             return
         room = st.session_state.room
-    # Test runs use a disposable ID so the shortcut cannot overwrite the player's save.
-    demo_game_id = st.session_state.get("demo_game_id")
-    demo_mode = bool(st.session_state.demo_mode and not room and isinstance(demo_game_id, str))
     # Each room has its own save, so multiplayer never touches single player.
     game_id = mp.save_id(player_id, room) if room else player_id
-    if demo_mode:
-        game_id = demo_game_id
 
-    saved = read_progress(game_id, None if room or demo_mode else st.session_state.browser_backup)
+    saved = read_progress(game_id, None if room else st.session_state.browser_backup)
     room_state = None
     if room:
         if saved is None or not st.session_state.playing:
@@ -370,26 +352,11 @@ def main():
             begin_play(saved, room_state["epoch_ms"])
         new_clicked = continue_clicked = False
     else:
-        start_col, continue_col, spacer = st.columns([1, 1, 3])
+        start_col, continue_col, _ = st.columns([1, 1, 3])
         with start_col:
             new_clicked = st.button("New Game", use_container_width=True, type="primary")
         with continue_col:
             continue_clicked = st.button("Continue", use_container_width=True, disabled=saved is None)
-        with spacer:
-            # Local testing only: set TEAM_PLOT_TWIST_DEV=1. It never shows online.
-            if dev_tools_enabled() and st.button("Play escape ending → plot twist"):
-                demo_state = finale.demo_escape_state()
-                demo_game_id = f"{player_id}-demo-{uuid.uuid4().hex}"
-                with closing(connect_db(DB_PATH)) as conn:
-                    created = restore_game(conn, demo_state, demo_game_id)
-                if created:
-                    st.session_state.demo_mode = True
-                    st.session_state.demo_game_id = demo_game_id
-                    begin_play(demo_state)
-                    st.rerun()
-                else:
-                    st.error("Could not create a temporary test save. Your saved game was left untouched.")
-
     if new_clicked:
         if saved is None:
             with closing(connect_db(DB_PATH)) as conn:
@@ -415,21 +382,9 @@ def main():
             if st.button("Cancel", use_container_width=True):
                 st.session_state.confirm_new = False
                 st.rerun()
-        if not demo_mode:
+        if not room:
             sync_browser_backup(player_id, saved)
         return
-
-    if demo_mode:
-        exit_col, _ = st.columns([1, 5])
-        with exit_col:
-            if st.button("Exit test run", use_container_width=True):
-                with closing(connect_db(DB_PATH)) as conn:
-                    conn.execute("DELETE FROM progress WHERE player_id=?", (game_id,))
-                st.session_state.demo_mode = False
-                st.session_state.pop("demo_game_id", None)
-                st.session_state.playing = False
-                st.rerun()
-        st.caption("Test run · your regular saved game is unchanged.")
 
     if not st.session_state.playing or saved is None:
         if saved is None:
@@ -522,7 +477,7 @@ def main():
                 save_position(conn, position, game_id)
 
     current = read_progress(game_id)
-    if not room and not demo_mode:
+    if not room:
         sync_browser_backup(player_id, current)
     if current is not None:
         inventory, doorway, place = st.columns(3)
