@@ -311,10 +311,15 @@ def main():
           border: 1px solid #365058; background:#182c32; color:#e5e9df; font-weight: 700;
           transition: transform .15s ease, box-shadow .15s ease; }
         div[data-testid="stButton"] button:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(22,42,49,.18); }
-        div[data-testid="stButton"] button[kind="primary"] { color: #fff3d7; border-color: #d0ad6e;
-          background: linear-gradient(145deg,#294b52,#172f39); }
-        [data-testid="stBaseButton-primary"] { background:#d8b679!important; border-color:#d8b679!important; color:#152429!important; }
-        div[data-testid="stButton"] button:not([kind="primary"]) { color: #253d45; background: #efe7d4; }
+        div[data-testid="stButton"] button[kind="primary"], [data-testid="stBaseButton-primary"] {
+          color:#17272d !important; background:#f2dfa9 !important; border:2px solid #fff1c9 !important;
+          font-size:1.05rem; font-weight:800; text-shadow:none; }
+        div[data-testid="stButton"] button:not([kind="primary"]), [data-testid="stBaseButton-secondary"] {
+          color:#17272d !important; background:#fff8e8 !important; border:2px solid #e7d4a7 !important;
+          font-size:1.05rem; font-weight:800; text-shadow:none; }
+        div[data-testid="stButton"] button:disabled, [data-testid="stBaseButton-secondary"]:disabled {
+          color:#354247 !important; background:#e6dcc5 !important; border-color:#cbbd9b !important; opacity:1 !important; }
+        div[data-testid="stButton"] button:hover:not(:disabled) { filter:brightness(.96); }
         [data-testid="stExpander"] { border-color:#2d454d; border-radius:10px; }
         [data-testid="stAlert"] { border-radius: 12px; background: rgba(37,62,70,.88); color: #f1eadb; }
         @media (max-width: 640px) {
