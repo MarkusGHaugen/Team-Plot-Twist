@@ -282,18 +282,47 @@ def main():
     st.markdown(
         """
         <style>
+        html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
+          background: #132b34 !important; }
         .stApp { background:radial-gradient(ellipse at 50% 0%,#1b3036 0%,#101b22 45%,#0b1218 100%); color:#e8ede8; }
-        .block-container { max-width:1200px; padding-top:1.6rem; padding-bottom:2rem; }
-        [data-testid="stHeader"] { background:transparent; }
+        [data-testid="stHeader"] { background: transparent !important; }
         [data-testid="stAppDeployButton"] { display:none; }
+        .block-container { max-width: 1280px; padding-top: .8rem; padding-bottom: 2rem; }
+        .pt-hero { position: relative; min-height: 330px; margin: 0 0 1.15rem; overflow: visible;
+          border: 0; border-radius: 0; background: transparent; box-shadow: none; isolation: isolate; }
+        .pt-hero__art { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: -2; pointer-events: none; }
+        .pt-hero::after { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+          background: linear-gradient(90deg, rgba(8,22,29,.82), rgba(8,22,29,.48) 48%, rgba(8,22,29,.1)),
+          linear-gradient(0deg, rgba(6,20,27,.45), transparent 55%); }
+        .pt-hero__copy { position: relative; z-index: 1; max-width: 690px; padding: 34px 38px 30px; color: #f7eedb; }
+        .pt-hero__eyebrow { margin: 0 0 8px; color: #e3c28a; font: 700 12px/1.2 system-ui,sans-serif;
+          letter-spacing: .19em; text-transform: uppercase; }
+        .pt-hero h1 { margin: 0; color: #fff6e4; font: 700 clamp(30px,4vw,48px)/1.04 Georgia,serif;
+          letter-spacing: -.025em; text-shadow: 0 3px 18px rgba(0,0,0,.45); }
         h1 { margin-bottom:.1rem; font-family:Georgia,serif; color:#f0e6d1; }
-        .pt-app-wordmark { display:flex; align-items:center; gap:10px; margin:0 0 10px; color:#d4ba86; font:750 11px/1.4 system-ui,sans-serif; letter-spacing:.2em; }
+        .pt-app-wordmark { display:flex; align-items:center; gap:10px; margin:0 0 10px; color:#d4ba86;
+          font:750 11px/1.4 system-ui,sans-serif; letter-spacing:.2em; }
         .pt-app-wordmark::before { content:""; width:22px; height:1px; background:#b99a60; }
-        div[data-testid="stButton"] button { border-radius:.6rem; background:#182c32; border:1px solid #365058; color:#e5e9df; }
-        [data-testid="stBaseButton-primary"] { background:#d8b679!important; border-color:#d8b679!important; color:#152429!important; }
+        .pt-hero__copy p:last-child { margin: 13px 0 0; color: #e1e0d4; font: 16px/1.55 Georgia,serif; }
+        [data-testid="stRadio"] label, [data-testid="stCaptionContainer"] { color: #e1e0d4 !important; }
         [data-testid="stRadio"] [role="radiogroup"] { gap:18px; }
+        [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] strong { color: #e1e0d4; }
+        div[data-testid="stButton"] button { min-height: 48px; border-radius: .7rem;
+          border: 1px solid #365058; background:#182c32; color:#e5e9df; font-weight: 700;
+          transition: transform .15s ease, box-shadow .15s ease; }
+        div[data-testid="stButton"] button:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(22,42,49,.18); }
+        div[data-testid="stButton"] button[kind="primary"] { color: #fff3d7; border-color: #d0ad6e;
+          background: linear-gradient(145deg,#294b52,#172f39); }
+        [data-testid="stBaseButton-primary"] { background:#d8b679!important; border-color:#d8b679!important; color:#152429!important; }
+        div[data-testid="stButton"] button:not([kind="primary"]) { color: #253d45; background: #efe7d4; }
         [data-testid="stExpander"] { border-color:#2d454d; border-radius:10px; }
-        [data-testid="stCaptionContainer"] { color:#acbbb8; }
+        [data-testid="stAlert"] { border-radius: 12px; background: rgba(37,62,70,.88); color: #f1eadb; }
+        @media (max-width: 640px) {
+          .pt-hero { min-height: 300px; }
+          .pt-hero__copy { padding: 27px 23px; }
+          .pt-hero__copy p:last-child { max-width: 34ch; font-size: 14px; }
+          .pt-hero::after { background: linear-gradient(90deg,rgba(8,22,29,.82),rgba(8,22,29,.36)),linear-gradient(0deg,rgba(6,20,27,.42),transparent 58%); }
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -301,8 +330,53 @@ def main():
     if st.session_state.get("playing"):
         st.markdown('<div class="pt-app-wordmark">THE VOYAGE · TEAM PLOT TWIST</div>', unsafe_allow_html=True)
     else:
-        st.title("Team Plot Twist")
-        st.caption("Escape from the pirate ship · Six ways to freedom.")
+        st.markdown(
+        '''
+        <section class="pt-hero" aria-label="Pirates surround the prisoner at sea">
+          <svg class="pt-hero__art" viewBox="0 0 1200 360" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <defs>
+              <linearGradient id="pt-sky" x2="0" y2="1"><stop stop-color="#314b57"/><stop offset=".68" stop-color="#8c9b99"/><stop offset="1" stop-color="#536f75"/></linearGradient>
+              <linearGradient id="pt-sea" x2="0" y2="1"><stop stop-color="#496f78"/><stop offset="1" stop-color="#142f3a"/></linearGradient>
+              <linearGradient id="pt-fog" x2="0" y2="1"><stop stop-color="#e0e1d5" stop-opacity=".05"/><stop offset=".62" stop-color="#d8ded7" stop-opacity=".62"/><stop offset="1" stop-color="#c4d1ce" stop-opacity=".03"/></linearGradient>
+              <filter id="pt-blur"><feGaussianBlur stdDeviation="13"/></filter>
+            </defs>
+            <rect width="1200" height="230" fill="url(#pt-sky)"/><rect y="220" width="1200" height="140" fill="url(#pt-sea)"/>
+            <path d="M0 239 Q85 228 170 240 T340 239 T510 240 T680 238 T850 240 T1020 238 T1200 240" fill="none" stroke="#b7c4bc" stroke-opacity=".3" stroke-width="3"/>
+            <g fill="#172b31" stroke="#111f25" stroke-width="5">
+              <path d="M56 212 Q130 225 204 212 L190 238 Q130 251 70 238Z"/><path d="M126 210V86l18 13v111Z"/><path d="M145 100l43 24-43 18Z"/>
+              <path d="M950 208 Q1034 226 1118 208 L1096 239 Q1034 253 972 239Z"/><path d="M1027 207V72l18 15v120Z"/><path d="M1045 88l52 28-52 21Z"/>
+            </g>
+            <g fill="#171c1c"><path d="M149 105l27 13-27 14Z"/><path d="M1047 92l35 19-35 19Z"/></g>
+            <g opacity=".9" fill="#d3d0bd"><circle cx="160" cy="119" r="3"/><path d="M155 125l10 5m0-5-10 5" stroke="#d3d0bd" stroke-width="2"/></g>
+            <g opacity=".88" fill="#d3d0bd"><circle cx="1060" cy="108" r="3"/><path d="M1055 114l10 5m0-5-10 5" stroke="#d3d0bd" stroke-width="2"/></g>
+            <g fill="#17272c" stroke="#17272c" stroke-linecap="round" stroke-width="8">
+              <path d="M336 260l-7 52m35-52 9 52m-25-85v45m0-38-19 16m20-15 17 14"/><circle cx="348" cy="224" r="13"/>
+              <path d="M467 250l-8 64m39-64 8 64m-24-99v47m-1-37-23-17m23 17 25-28"/><circle cx="477" cy="205" r="14"/>
+              <path d="M734 251l-8 63m38-63 8 63m-22-97v47m0-34-20-18m20 18 24-27"/><circle cx="741" cy="207" r="14"/>
+              <path d="M859 261l-7 51m35-51 8 51m-24-79v40m-1-31-18-14m19 15 19-22"/><circle cx="871" cy="228" r="12"/>
+            </g>
+            <g fill="none" stroke="#d5d9d4" stroke-linecap="round" stroke-width="4">
+              <path d="M358 200l34-37m-4 0 8 5-8 5"/><path d="M498 183l-31-35m-1 0 8-1-1 8"/>
+              <path d="M761 184l30-38m-2-1 8 5-8 5"/><path d="M881 211l-26-35m-1 0 8-1-1 8"/>
+            </g>
+            <g stroke-linecap="round" stroke-width="11">
+              <path d="M455 300l-7 42m49-42 7 42" stroke="#161c20"/>
+              <path d="M461 252v51m-2-39-19 13m20-14 19 13" stroke="#34717b"/>
+              <circle cx="461" cy="237" r="14" fill="#d3a27c" stroke="#352b27" stroke-width="3"/>
+              <path d="M447 233q14-23 29 0" fill="#263a41" stroke="#263a41" stroke-width="7"/>
+            </g>
+            <rect y="188" width="1200" height="129" fill="url(#pt-fog)"/>
+            <g filter="url(#pt-blur)" fill="#e2e4dc" opacity=".25"><ellipse cx="292" cy="235" rx="185" ry="24"/><ellipse cx="875" cy="246" rx="220" ry="22"/></g>
+          </svg>
+          <div class="pt-hero__copy">
+            <p class="pt-hero__eyebrow">A pirate ship adventure</p>
+            <h1>Team Plot Twist</h1>
+            <p>Escape from the pirate ship. Six ways to freedom — explore, find clues and choose your escape.</p>
+          </div>
+        </section>
+        ''',
+        unsafe_allow_html=True,
+    )
 
     if "playing" not in st.session_state:
         st.session_state.playing = False
