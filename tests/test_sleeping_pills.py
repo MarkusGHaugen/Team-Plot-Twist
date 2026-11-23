@@ -1,5 +1,8 @@
 """Sleeping pills: a drugged meal for the whole crew, or a fake death in the cell."""
 import json, math
+import re
+import sqlite3
+from contextlib import closing
 from dataclasses import asdict, replace
 import pytest
 import logic as L
@@ -141,7 +144,51 @@ def test_swallowing_the_pills_in_the_cell_ends_in_the_castaway_ending():
     assert p['x'] + p['reach'] < L.CELL_KEY_PLAYER_MIN
 
 
+@pytest.mark.parametrize('legacy', [False, True], ids=['fresh', 'four-ending-save'])
+@pytest.mark.parametrize('ending', ['castaway', 'lullaby'])
+def test_sleeping_pill_endings_persist(tmp_path, legacy, ending):
+    from db import apply_action, connect_db, load_game, restore_game
+
+    path = tmp_path / 'game.sqlite3'
+    if ending == 'castaway':
+        floor = L.STORY_POINTS['cell_floor']
+        saved = accepted(story_action(free('cell', floor['x']), 'inspect', 'cell_floor', 1000))
+        action, point, now = 'story_finish', 'cell_floor', 2000
+    else:
+        helm = L.STORY_POINTS['helm']
+        saved = replace(drugged(), position=Position(helm['zone'], helm['x']))
+        now = max(story_progress(saved)['voyage']['feast']['sleep'].values()) + 1
+        action, point = 'story_inspect', 'helm'
+
+    if legacy:
+        with closing(connect_db(tmp_path / 'schema.sqlite3')) as conn:
+            schema = conn.execute("SELECT sql FROM sqlite_master WHERE name='progress'").fetchone()[0]
+        schema, matches = re.subn(
+            r'CHECK \(ending IN \([^)]*\)\)',
+            "CHECK (ending IN ('','takeover','crate','dinghy','command'))",
+            schema,
+        )
+        assert matches == 1
+        with closing(sqlite3.connect(path)) as conn:
+            conn.execute(schema)
+            assert restore_game(conn, saved, 'player')
+            assert restore_game(conn, initial_state(), 'other-player')
+
+    with closing(connect_db(path)) as conn:
+        if not legacy:
+            assert restore_game(conn, saved, 'player')
+        assert load_game(conn, 'player') == saved
+        result = apply_action(conn, action, saved.position, 0, 'player', item=point, now_ms=now)
+        assert result.accepted and result.state.ending == ending
+
+    with closing(connect_db(path)) as conn:
+        assert load_game(conn, 'player') == result.state
+        if legacy:
+            assert load_game(conn, 'other-player') == initial_state()
+
+
 def test_endings_are_numbered_out_of_six():
+    # The mandatory cannon finale is the last scene of each route, not a new ending.
     from content import ENDINGS
     assert len(ENDINGS) == 6 and all(e['subtitle'].split(' · ')[0].endswith('of 6') for e in ENDINGS.values())
 
@@ -169,15 +216,26 @@ def test_canvas_draws_the_same_meal_as_the_server():
 
 
 @pytest.mark.skipif(NODE is None, reason='Node runs the Canvas rules')
-def test_castaway_cutscene_drifts_four_days_and_washes_ashore():
-    result = canvas(r'''[1,5,6.2,9,12.6,16,19.5,23,26,27.9].map(t=>castawayMotion(1000,560,t))''', {})
-    phases = [m['phase'] for m in result]
-    assert phases == ['cell', 'overboard', 'overboard', 'adrift', 'adrift', 'adrift', 'adrift', 'ashore', 'ashore', 'ashore']
-    assert [m['day'] for m in result[3:7]] == [1, 2, 3, 4]
-    assert result[4]['storm'] > .5 and result[3]['storm'] == 0         # day two is the storm
-    final = result[-1]
-    assert final['island'] == 1 and final['tip'] == 1 and final['out'] > .9
-    assert abs(final['barrel']['y'] - final['shore']) < 1                # the barrel lies on the beach
+def test_castaway_cutscene_shows_discovery_four_days_and_a_shoreline_exit():
+    result = canvas(r'''[.5, 2, 3.8, 6, 9.3, 10.5, 14.8, 17.2, 20.3, 22.5, 25.5, 28.7, 30.1, 32]
+        .map(t => castawayMotion(1000, 560, t))''', {})
+    waiting, entering, found, thrown, *rest = result
+    assert [m['phase'] for m in result] == ['cell'] * 3 + ['overboard'] + ['adrift'] * 6 + ['ashore'] * 4
+    assert not waiting['gateOpen'] and entering['gateOpen']
+    assert not entering['found'] and found['found']
+    drift, shore = rest[:6], rest[6:]
+    assert {m['day'] for m in drift} == {1, 2, 3, 4}
+    assert drift[1]['peek'] > .5 and drift[1]['night'] == 0
+    assert drift[2]['storm'] > .5 and drift[2]['peek'] == 0
+    assert drift[4]['night'] > .5 and drift[4]['peek'] > .5
+    for m in drift:
+        assert abs(m['waterline'] - m['barrel']['y']) < 10 * m['scale']
+    arriving, stopped, crawling, finished = shore
+    assert arriving['island'] < 1 and arriving['crawl'] == 0
+    assert stopped['arrival'] == 1 and stopped['crawl'] == 0
+    assert 0 < crawling['crawl'] < 1 and finished['crawl'] == 1
+    assert stopped['barrel']['x'] == crawling['barrel']['x'] == finished['barrel']['x']
+    assert 0 < finished['shoreX'] - finished['barrel']['x'] < 20 * finished['scale']
 
 
 def test_new_actions_go_through_the_saved_game(tmp_path):

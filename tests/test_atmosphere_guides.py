@@ -21,7 +21,7 @@ def test_restart_requires_confirmation_and_only_resets_own_save(tmp_path):
   assert apply_action(c,'close_reading',s.position,0,'a',now_ms=1500).accepted
   assert load_game(c,'a').has_key
   assert apply_action(c,'restart_prompt',s.position,0,'a',now_ms=1600).accepted
-  assert apply_action(c,'restart_game',s.position,0,'a',now_ms=1700).accepted
+  assert apply_action(c,'restart_game',s.position,0,'a',item='confirmed',now_ms=1700).accepted
   assert load_game(c,'a')==initial_state() and load_game(c,'b')==s
 
 
@@ -80,9 +80,10 @@ def test_completed_game_restart_prompt_leaves_victory_immutable(tmp_path):
  s=free(position=Position('aft_deck',1660),story_state=json.dumps({'items':['sail','rope']}),ending='dinghy')
  with connect_db(tmp_path/'complete.sqlite3') as c:
   restore_game(c,s,'a');before=c.total_changes
-  assert apply_action(c,'restart_prompt',s.position,0,'a',now_ms=1000).accepted
+  assert not apply_action(c,'restart_prompt',s.position,0,'a',now_ms=1000).accepted
   assert load_game(c,'a')==s and c.total_changes==before
-  assert apply_action(c,'restart_game',s.position,0,'a',now_ms=1500).state==initial_state()
+  assert not apply_action(c,'restart_game',s.position,0,'a',item='confirmed',now_ms=1500).accepted
+  assert load_game(c,'a')==s
 
 
 def test_guide_save_rejects_incomplete_or_impossible_motion():
@@ -104,7 +105,7 @@ def test_guide_save_rejects_incomplete_or_impossible_motion():
 
 
 def test_music_uses_one_player_pair_and_cleans_up_its_scheduler():
- from test_canvas_rules import canvas
+ from test_canvas_rules import require_node
  expression=r'''(async()=>{
   let contexts=0,cleared=0,clock=1000,callback;
   globalThis.Date={now:()=>clock};globalThis.document={hidden:false};globalThis.URL=class {constructor(path){this.href=path;}};
@@ -123,7 +124,7 @@ def test_music_uses_one_player_pair_and_cleans_up_its_scheduler():
  from pathlib import Path
  source=Path('game_component/game.js').read_text().replace('export default function','function mount')
  runner="const vm=require('vm'),v=JSON.parse(require('fs').readFileSync(0,'utf8')),c={};vm.createContext(c);vm.runInContext(v.source,c);Promise.resolve(vm.runInContext(v.expression,c)).then(r=>console.log(JSON.stringify(r))).catch(e=>{console.error(e);process.exitCode=1});"
- result=json.loads(subprocess.run([shutil.which('node'),'-e',runner],input=json.dumps({'source':source,'expression':expression}),text=True,capture_output=True,check=True).stdout)
+ result=json.loads(subprocess.run([require_node(),'-e',runner],input=json.dumps({'source':source,'expression':expression}),text=True,capture_output=True,check=True).stdout)
  assert result=={'before':False,'same':True,'contexts':2,'explore':'explore','alert':'alert','off':True,'abandoned':True,'cleared':2}
 
 

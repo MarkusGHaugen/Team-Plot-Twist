@@ -1,0 +1,201 @@
+"""Mandatory cannon finale after any ending; the reached route never changes.
+
+The server owns the rules. It picks the volley from a stored seed, the page plays it and
+reports the player's moves, and the server judges them. The result is stored separately
+from the reached ending, and a caught player may retry the volley.
+"""
+import json
+import random
+from dataclasses import replace
+
+import logic as L
+from content import ENDINGS
+
+LIVES = 3
+BALLS = 10
+FIRST_AT_MS = 10_000        # leaves time for the beach celebration and guard reveal
+GAP_MS = 1000               # rapid volley: about one second between cannonballs
+JITTER_MS = 100             # keep adjacent dodge windows separate
+END_MS = FIRST_AT_MS + (BALLS - 1) * GAP_MS + 1500
+WINDOW_BEFORE_MS = 500      # a move this long before the ball arrives still dodges it
+WINDOW_AFTER_MS = 250       # and this long after
+EARLY_SLACK_MS = 3000       # the report may come this much before the volley ends (latency)
+MAX_MOVES = 120
+MAX_ITEM_CHARS = 4000
+KINDS = ('finale_start', 'finale_report', 'finale_retry')
+STATUSES = ('active', 'won', 'lost')
+MOVES = ('jump', 'duck')
+_BASE = {'status', 'seed', 'started', 'attempt'}
+_SEED_LIMIT = 2 ** 31
+
+
+def volley(seed):
+    """The ten cannonballs of one attempt: a lane ('low' is jumped, 'high' is ducked) and an arrival time."""
+    rng = random.Random(seed)
+    return [{'lane': rng.choice(('low', 'high')),
+             'at': FIRST_AT_MS + i * GAP_MS + rng.randint(-JITTER_MS, JITTER_MS)} for i in range(BALLS)]
+
+
+def outcomes(seed, moves):
+    """For every ball in order: True if it was dodged. A low ball needs a jump and a high ball
+    needs a duck, within a short window around its arrival time."""
+    result = []
+    for ball in volley(seed):
+        counter = 'jump' if ball['lane'] == 'low' else 'duck'
+        lo, hi = ball['at'] - WINDOW_BEFORE_MS, ball['at'] + WINDOW_AFTER_MS
+        result.append(any(kind == counter and lo <= t <= hi for t, kind in moves))
+    return result
+
+
+def judge(seed, moves):
+    """(dodged, hits)."""
+    dodged = sum(outcomes(seed, moves))
+    return dodged, BALLS - dodged
+
+
+def _int(x):
+    return type(x) is int
+
+
+def valid(f):
+    """Is a stored finale record well formed? (Whether it fits the ending is checked in logic.)"""
+    if not isinstance(f, dict):
+        return False
+    status = f.get('status')
+    if status not in STATUSES:
+        return False
+    keys = _BASE | ({'dodged', 'hits'} if status != 'active' else set())
+    if set(f) != keys:
+        return False
+    if not _int(f['seed']) or not 0 <= f['seed'] < _SEED_LIMIT:
+        return False
+    if not _int(f['started']) or f['started'] < 0:
+        return False
+    if not _int(f['attempt']) or not 1 <= f['attempt'] <= 1000:
+        return False
+    if status == 'active':
+        return True
+    dodged, hits = f['dodged'], f['hits']
+    if not _int(dodged) or not _int(hits) or dodged < 0 or hits < 0 or dodged + hits != BALLS:
+        return False
+    return hits < LIVES if status == 'won' else hits >= LIVES
+
+
+def _record(state):
+    from logic import story_progress
+    return story_progress(state).get('voyage', {}).get('finale')
+
+
+def _with_record(state, record, **changes):
+    from voyage import progress, save
+    v = progress(state)
+    v['finale'] = record
+    return replace(save(state, v), **changes)
+
+
+def _no(state, message):
+    return L.ActionResult(state, False, message)
+
+
+def start(state, now):
+    if not state.ending:
+        return _no(state, 'Reach one of the endings first.')
+    if _record(state) is not None:
+        return _no(state, 'The guards are already after you.')
+    record = {'status': 'active', 'seed': int(now) % _SEED_LIMIT,
+              'started': int(now), 'attempt': 1}
+    return L.ActionResult(_with_record(state, record), True, 'The music stops. The guards are back, with cannons!')
+
+
+def _clean_moves(moves):
+    if not isinstance(moves, list) or len(moves) > MAX_MOVES:
+        return None
+    clean = []
+    for m in moves:
+        if not isinstance(m, (list, tuple)) or len(m) != 2:
+            return None
+        t, kind = m
+        if not _int(t) or not 0 <= t <= END_MS + 5000 or kind not in MOVES:
+            return None
+        clean.append((t, kind))
+    return clean
+
+
+def report(state, moves, now):
+    f = _record(state)
+    if f is None or f['status'] != 'active':
+        return _no(state, 'There is no cannon volley to finish.')
+    clean = _clean_moves(moves)
+    if clean is None:
+        return _no(state, 'That report of your moves is not valid.')
+    results = outcomes(f['seed'], clean)
+    dodged = sum(results)
+    hits = BALLS - dodged
+    # The volley is over when the last ball has landed, or sooner once the third hit has.
+    misses = [i for i, ok in enumerate(results) if not ok]
+    over_at = volley(f['seed'])[misses[LIVES - 1]]['at'] + WINDOW_AFTER_MS if len(misses) >= LIVES else END_MS
+    if int(now) - f['started'] < over_at - EARLY_SLACK_MS:
+        return _no(state, 'The volley is not over yet.')
+    if hits < LIVES:
+        record = {**f, 'status': 'won', 'dodged': dodged, 'hits': hits}
+        return L.ActionResult(_with_record(state, record), True, 'The rescue boat is here!')
+    record = {**f, 'status': 'lost', 'dodged': dodged, 'hits': hits}
+    return L.ActionResult(_with_record(state, record), True, 'The guards caught you.')
+
+
+def retry(state, now):
+    f = _record(state)
+    if not state.ending or f is None or f['status'] != 'lost':
+        return _no(state, 'There is no caught finale to retry.')
+    if f['attempt'] >= 1000:
+        return _no(state, 'No more cannon volleys can be started for this save.')
+    record = {'status': 'active', 'seed': int(now) % _SEED_LIMIT,
+              'started': int(now), 'attempt': f['attempt'] + 1}
+    return L.ActionResult(_with_record(state, record), True, 'A new cannon volley begins!')
+
+
+def dispatch(state, kind, item, now):
+    """Entry point from the action pipeline (the moves arrive as a JSON string in `item`)."""
+    if kind == 'finale_start':
+        return start(state, now)
+    if kind == 'finale_retry':
+        return retry(state, now)
+    if not isinstance(item, str) or len(item) > MAX_ITEM_CHARS:
+        return _no(state, 'That report of your moves is not valid.')
+    try:
+        moves = json.loads(item)
+    except ValueError:
+        return _no(state, 'That report of your moves is not valid.')
+    return report(state, moves, now)
+
+
+def public(state):
+    """What the page needs to play and draw the finale, or None when there is none."""
+    f = _record(state)
+    if f is None:
+        return None
+    done = f['status'] != 'active'
+    hits = f.get('hits', 0)
+    return {'status': f['status'], 'attempt': f['attempt'], 'seed': f['seed'],
+            'balls': volley(f['seed']), 'total': BALLS, 'lives': LIVES, 'end_ms': END_MS,
+            'window_before': WINDOW_BEFORE_MS, 'window_after': WINDOW_AFTER_MS,
+            'dodged': f.get('dodged', 0), 'hits': hits,
+            'left': 0 if done else BALLS, 'lives_left': max(0, LIVES - hits)}
+
+
+def _demo_escape_state():
+    """A valid save just after the castaway escape, before the cannon twist starts."""
+    import json
+    return replace(L.initial_state(), has_key=True, door_open=True, reached_kitchen=True,
+                    position=L.Position('kitchen', 1200.), ending='castaway',
+                    story_state=json.dumps({'items': ['sleeping_pills'], 'voyage': {'watch_start': 0}}))
+
+
+def demo_escape_state():
+    """A save for previewing an original escape scene and its cannonball plot twist."""
+    return _demo_escape_state()
+
+
+def demo_state(now):
+    """A save already in the cannon finale, for testing without playing an ending first."""
+    return start(_demo_escape_state(), now).state

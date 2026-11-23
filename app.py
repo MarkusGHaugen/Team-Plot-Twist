@@ -22,9 +22,11 @@ from db import apply_action, claim_legacy, connect_db, load_game, new_game, rest
 from logic import (GUARD_ROUTES, GUARD_SEGMENTS, MAP_CONFIG, Position, capture_paths,
                    state_from_backup, story_progress, game_now_ms, route_points)
 from action_transport import handle_action
-from content import DOCUMENTS, ENDINGS, ITEMS, ROLES, STORY_POINTS
+from content import DOCUMENTS, ENDINGS, FINALE_RESCUE_EPILOGUE, ITEMS, ROLES, STORY_POINTS
+import finale
 import multiplayer as mp
 import shared_ship
+from journal import journal_hints
 
 
 ROOT = Path(__file__).resolve().parent
@@ -282,7 +284,9 @@ def main():
         <style>
         html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
           background: #132b34 !important; }
+        .stApp { background:radial-gradient(ellipse at 50% 0%,#1b3036 0%,#101b22 45%,#0b1218 100%); color:#e8ede8; }
         [data-testid="stHeader"] { background: transparent !important; }
+        [data-testid="stAppDeployButton"] { display:none; }
         .block-container { max-width: 1280px; padding-top: .8rem; padding-bottom: 2rem; }
         .pt-hero { position: relative; min-height: 330px; margin: 0 0 1.15rem; overflow: visible;
           border: 0; border-radius: 0; background: transparent; box-shadow: none; isolation: isolate; }
@@ -295,15 +299,23 @@ def main():
           letter-spacing: .19em; text-transform: uppercase; }
         .pt-hero h1 { margin: 0; color: #fff6e4; font: 700 clamp(30px,4vw,48px)/1.04 Georgia,serif;
           letter-spacing: -.025em; text-shadow: 0 3px 18px rgba(0,0,0,.45); }
+        h1 { margin-bottom:.1rem; font-family:Georgia,serif; color:#f0e6d1; }
+        .pt-app-wordmark { display:flex; align-items:center; gap:10px; margin:0 0 10px; color:#d4ba86;
+          font:750 11px/1.4 system-ui,sans-serif; letter-spacing:.2em; }
+        .pt-app-wordmark::before { content:""; width:22px; height:1px; background:#b99a60; }
         .pt-hero__copy p:last-child { margin: 13px 0 0; color: #e1e0d4; font: 16px/1.55 Georgia,serif; }
         [data-testid="stRadio"] label, [data-testid="stCaptionContainer"] { color: #e1e0d4 !important; }
+        [data-testid="stRadio"] [role="radiogroup"] { gap:18px; }
         [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] strong { color: #e1e0d4; }
         div[data-testid="stButton"] button { min-height: 48px; border-radius: .7rem;
-          border: 1px solid #b79b67; font-weight: 700; transition: transform .15s ease, box-shadow .15s ease; }
+          border: 1px solid #365058; background:#182c32; color:#e5e9df; font-weight: 700;
+          transition: transform .15s ease, box-shadow .15s ease; }
         div[data-testid="stButton"] button:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(22,42,49,.18); }
         div[data-testid="stButton"] button[kind="primary"] { color: #fff3d7; border-color: #d0ad6e;
           background: linear-gradient(145deg,#294b52,#172f39); }
+        [data-testid="stBaseButton-primary"] { background:#d8b679!important; border-color:#d8b679!important; color:#152429!important; }
         div[data-testid="stButton"] button:not([kind="primary"]) { color: #253d45; background: #efe7d4; }
+        [data-testid="stExpander"] { border-color:#2d454d; border-radius:10px; }
         [data-testid="stAlert"] { border-radius: 12px; background: rgba(37,62,70,.88); color: #f1eadb; }
         @media (max-width: 640px) {
           .pt-hero { min-height: 300px; }
@@ -315,7 +327,10 @@ def main():
         """,
         unsafe_allow_html=True,
     )
-    st.markdown(
+    if st.session_state.get("playing"):
+        st.markdown('<div class="pt-app-wordmark">THE VOYAGE · TEAM PLOT TWIST</div>', unsafe_allow_html=True)
+    else:
+        st.markdown(
         '''
         <section class="pt-hero" aria-label="Pirates surround the prisoner at sea">
           <svg class="pt-hero__art" viewBox="0 0 1200 360" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
@@ -371,7 +386,6 @@ def main():
         st.session_state.browser_backup = None
     if "browser_storage_available" not in st.session_state:
         st.session_state.browser_storage_available = True
-
     identity = browser_identity_component()(
         data={"request_identity": "player_id" not in st.session_state},
         on_identity_change=lambda: None,
@@ -425,16 +439,15 @@ def main():
             begin_play(saved, room_state["epoch_ms"])
         new_clicked = continue_clicked = False
     else:
-        start_col, continue_col, spacer = st.columns([1, 1, 3])
+        start_col, continue_col, _ = st.columns([1, 1, 3])
         with start_col:
             new_clicked = st.button("New Game", use_container_width=True, type="primary")
         with continue_col:
             continue_clicked = st.button("Continue", use_container_width=True, disabled=saved is None)
-
     if new_clicked:
         if saved is None:
             with closing(connect_db(DB_PATH)) as conn:
-                new_game(conn, player_id)
+                new_game(conn, game_id)
             begin_play(show_intro=True)
         else:
             st.session_state.confirm_new = True
@@ -449,14 +462,15 @@ def main():
         with yes_col:
             if st.button("Confirm New Game", use_container_width=True):
                 with closing(connect_db(DB_PATH)) as conn:
-                    new_game(conn, player_id)
+                    new_game(conn, game_id)
                 begin_play(show_intro=True)
                 st.rerun()
         with no_col:
             if st.button("Cancel", use_container_width=True):
                 st.session_state.confirm_new = False
                 st.rerun()
-        sync_browser_backup(player_id, saved)
+        if not room:
+            sync_browser_backup(player_id, saved)
         return
 
     if not st.session_state.playing or saved is None:
@@ -469,17 +483,16 @@ def main():
         sync_browser_backup(player_id, saved)
         return
 
-    st.markdown(
-        "**Controls:** `A` / `D` or `←` / `→` walk · `W` / `↑` climb · `↓` descend · `E` steal/take/ambush · `F` inspect/use/hide · `I` inventory · `L` lamp · `J` journal · `B` whistle · `R` shoot · `T` bribe · `Space` crouch/stand"
-    )
-    st.caption("Controls work while the game is visible. Click the game area to focus it.")
     bright_view = st.toggle("Brighter view", key="bright_view", help="Brighten the ship for better visibility.")
 
     progress = story_progress(saved)
     data = {**asdict(saved),
         "story": progress,
+        "journal_hints": journal_hints(saved, int(time.time() * 1000)),
         "documents": DOCUMENTS,
         "endings": ENDINGS,
+        "rescue_epilogue": FINALE_RESCUE_EPILOGUE,
+        "finale": finale.public(saved),
         "roles": ROLES,
         "run_id": st.session_state.run_id,
         "intro": st.session_state.get("intro_run_id") == st.session_state.run_id,
@@ -551,33 +564,34 @@ def main():
     if not room:
         sync_browser_backup(player_id, current)
     if current is not None:
-        inventory, doorway, place = st.columns(3)
-        items = []
-        if current.has_key: items.append("🗝️ Cell")
-        if current.has_blue_key: items.append("🔵 Chest")
-        if current.has_pistol: items.append("🔫 Pistol")
-        if current.has_lamp: items.append("🏮 Lamp")
-        if current.disguised and not story_progress(current).get("voyage",{}).get("captain_worn"): items.append("🥼 Uniform")
-        for item in story_progress(current)["items"]:
-            items.append(ITEMS[item]["icon"] + " " + ITEMS[item]["name"])
-        inventory.caption("Inventory: " + (" · ".join(items) if items else "Empty"))
-        doorway.caption("Cell door: " + ("Open" if current.door_open else "Locked"))
-        names = {
-            "cell": "Cell",
-            "hold": "Hold",
-            "lower_stair": "Lower stairs",
-            "mid": "Middle deck",
-            "cabin": "Cabin",
-            "hammock": "Upper hammock",
-            "dining": "Mess hall",
-            "chest_room": "Chest room",
-            "upper_deck": "Upper deck",
-            "upper_stair": "Upper stairs",
-            "kitchen": "Galley",
-            "mast": "Mast", "mast_top": "Mast top",
-        }
-        names.update({zone: info[0].capitalize() for zone, info in MAP_CONFIG["rooms"].items()})
-        place.caption("Location: " + names.get(current.position.zone, "Ship"))
+        with st.expander("Game details", expanded=False):
+            inventory, doorway, place = st.columns(3)
+            items = []
+            if current.has_key: items.append("🗝️ Cell")
+            if current.has_blue_key: items.append("🔵 Chest")
+            if current.has_pistol: items.append("🔫 Pistol")
+            if current.has_lamp: items.append("🏮 Lamp")
+            if current.disguised and not story_progress(current).get("voyage",{}).get("captain_worn"): items.append("🥼 Uniform")
+            for item in story_progress(current)["items"]:
+                items.append(ITEMS[item]["icon"] + " " + ITEMS[item]["name"])
+            inventory.caption("Inventory: " + (" · ".join(items) if items else "Empty"))
+            doorway.caption("Cell door: " + ("Open" if current.door_open else "Locked"))
+            names = {
+                "cell": "Cell",
+                "hold": "Hold",
+                "lower_stair": "Lower stairs",
+                "mid": "Middle deck",
+                "cabin": "Cabin",
+                "hammock": "Upper hammock",
+                "dining": "Mess hall",
+                "chest_room": "Chest room",
+                "upper_deck": "Upper deck",
+                "upper_stair": "Upper stairs",
+                "kitchen": "Galley",
+                "mast": "Mast", "mast_top": "Mast top",
+            }
+            names.update({zone: info[0].capitalize() for zone, info in MAP_CONFIG["rooms"].items()})
+            place.caption("Location: " + names.get(current.position.zone, "Ship"))
 
 
 if __name__ == "__main__":

@@ -36,13 +36,14 @@ from pathlib import Path
 from runtime_loader import load_backend
 r=Path(sys.argv[1]);sys.path.insert(0,str(r))
 load_backend(r)
-import db
+import db, journal
 assert db.VALUE=='old'
 (r/'content.py').write_text("VALUE='new'\\n")
 load_backend(r)
 assert db.VALUE=='new'
+assert journal.VALUE=='new'
 '''
- for name,text in [('content',"VALUE='old'\n"),('logic','from content import VALUE\n'),('escort','from logic import VALUE\n'),('voyage','from logic import VALUE\n'),('feast','from logic import VALUE\n'),('shiplife','from voyage import VALUE\n'),('db','from voyage import VALUE\n'),('action_transport','from db import VALUE\n')]:
+ for name,text in [('content',"VALUE='old'\n"),('logic','from content import VALUE\n'),('finale','from logic import VALUE\n'),('escort','from logic import VALUE\n'),('voyage','from logic import VALUE\n'),('feast','from logic import VALUE\n'),('shiplife','from voyage import VALUE\n'),('db','from voyage import VALUE\n'),('action_transport','from db import VALUE\n'),('journal','from logic import VALUE\n')]:
   (tmp_path/(name+'.py')).write_text(text)
  result=subprocess.run([sys.executable,'-c',script,str(tmp_path)],capture_output=True,text=True)
  assert result.returncode==0,result.stderr
