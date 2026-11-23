@@ -69,7 +69,8 @@ STORY_POINTS = {'opening_letter': {'zone': 'cell', 'x': 205.0, 'reach': 48.0, 'n
 
 DOCUMENTS = {'opening_letter': {'title': 'You are not the only one who wants to leave',
                     'kicker': 'LETTER IN THE CELL',
-                    'body': 'They locked you up because you saw the captain falsifying the cargo manifests. '
+                    'body': 'I saw the captain’s men haul you from the water after you jumped in to save your dog. '
+                            'He had you locked up because you saw him falsifying the cargo manifests. '
                             'At the next port, he plans to silence the witness.\n'
                             '\n'
                             'I cannot open your door. But the guard carries a key when he passes the stairs. '
@@ -194,3 +195,4 @@ DOCUMENTS['confirm_castaway']={'title':'Swallow the sleeping pills?','kicker':'A
 ENDINGS['lullaby']={'title':'A lullaby for pirates','subtitle':'Ending 5 of 4 · The drugged stew','body':'The crew snore around the mess table while you take the helm. By the time the first pirate stumbles on deck, the ship lies anchored under the guns of the harbour fort, and the soldiers are already rowing out.'}
 ENDINGS['castaway']={'title':'Castaway','subtitle':'Ending 6 of 4 · Four days adrift','body':'They found you cold and still on the floor of your cell and gave you to the sea in a barrel. For four days the waves carried you. Then the barrel ran aground on the white beach of a small island. Nobody lives here, but you are alive, and you are free.'}
 for ending in ENDINGS.values():ending['subtitle']=ending['subtitle'].replace('of 4','of 6')
+FINALE_RESCUE_EPILOGUE={'title':'Free at last','body':'The last cannonball splashes behind you. A small boat comes alongside, and in it sits the dog you thought you had lost. You climb aboard, the angry pirates shrink to specks on the horizon, and this time the sea really is yours.'}

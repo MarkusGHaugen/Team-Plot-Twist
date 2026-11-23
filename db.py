@@ -1,6 +1,7 @@
 """SQLite persistence for browser-specific player progress."""
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import asdict, fields
 from dataclasses import replace
@@ -108,6 +109,18 @@ def connect_db(path: str | Path) -> sqlite3.Connection:
             columns, rebuild = _progress_schema(conn)
             if rebuild:
                 conn.execute('ALTER TABLE progress RENAME TO progress_legacy')
+                if {'ending','story_state','player_id'} <= columns:
+                    for old in conn.execute("SELECT player_id,story_state FROM progress_legacy WHERE ending='free'").fetchall():
+                        try:
+                            story=json.loads(old['story_state'])
+                            finale_record=story.get('voyage',{}).get('finale',{})
+                            route=finale_record.get('origin')
+                            if finale_record.get('status')=='won' and route in ENDINGS:
+                                finale_record.pop('origin',None)
+                                conn.execute("UPDATE progress_legacy SET ending=?,story_state=? WHERE player_id=?",
+                                    (route,json.dumps(story,separators=(',',':')),old['player_id']))
+                        except (ValueError,TypeError,AttributeError):
+                            continue
                 conn.execute(_CREATE)
                 shared = ','.join(key for key in _KEYS if key in columns)
                 if 'player_id' in columns:
@@ -198,14 +211,21 @@ def apply_action(conn: sqlite3.Connection,kind: str,position: Position,guard_ela
     if state is None: return ActionResult(initial_state(),False,'Start a new game first.')
     wall_now = now_ms if now_ms is not None else 0
     if kind=='restart_prompt':
-        if state.ending:return ActionResult(state,True,'Confirm restart.')
+        if state.ending:return ActionResult(state,False,'The completed game can only be replaced through New Game confirmation.')
         candidate=with_position(state,position) if not state.reading and state.capture_phase=='none' else None
         result=replace(candidate or state,reading='restart_confirm',paused_at_ms=state.paused_at_ms or max(1,wall_now))
         with conn:_write_game(conn,result,player_id)
         return ActionResult(result,True,'')
     if kind=='restart_game':
-        if state.reading!='restart_confirm' and not state.ending:return ActionResult(state,False,'Confirm restart first.')
+        if state.ending or item!='confirmed' or state.reading!='restart_confirm':
+            return ActionResult(state,False,'Confirm restart first.')
         return ActionResult(new_game(conn,player_id),True,'A new escape begins.')
+    import finale
+    if kind in finale.KINDS:
+        result=finale.dispatch(state,kind,item,wall_now)
+        if result.accepted:
+            with conn:_write_game(conn,result.state,player_id)
+        return result
     if state.ending: return ActionResult(state,False,'The journey is complete. Start a new game to try another route.')
     if state.reading:
         if kind not in ('close_reading', 'story_finish'):

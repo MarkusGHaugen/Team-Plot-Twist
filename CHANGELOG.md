@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Mandatory cannon finale: after any of the six escape routes' original ending scenes, the beach celebration leads automatically into the cannon volley. Winning shows the rescue boat, dog and "Free at last" epilogue while preserving the reached ending. Three hits show "Caught by the cannons!" with a Try again button for a fresh volley; no loss resets the game automatically. New Game continues to require confirmation.
+- Validation: tests cover finale rules, save/restore, route preservation, multiplayer sharing, beach music and scene timing, retry behavior, and server/Canvas parity (`tests/test_cannon_finale.py`).
 - Multiplayer: one shared ship. What one player does happens for both (key, doors, items, coins, crew, alarms, the meal, the ending). A caught player is taken back to the locked cell and the crew search 30 seconds for the other, starting where they were last seen. Reading no longer pauses the game in multiplayer; Restart restarts the ship for both.
 - Multiplayer (beta): choose Single player or Multiplayer. Create a room and share its six-letter code; both players start in the cell and see each other move live through Ably. Each room has its own save. For now each player still has their own ship (doors, items and guards are not shared yet).
 - Sleeping pills in the cabin sea chest, with two new endings (6 in total): drug the crew stew so the whole crew eats and sleeps for two minutes (escape by dinghy or the helm, ending "A lullaby for pirates"), or swallow them in your cell and drift four days in a barrel to a deserted island (ending "Castaway").

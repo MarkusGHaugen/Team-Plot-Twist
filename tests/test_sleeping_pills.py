@@ -188,6 +188,7 @@ def test_sleeping_pill_endings_persist(tmp_path, legacy, ending):
 
 
 def test_endings_are_numbered_out_of_six():
+    # The mandatory cannon finale is the last scene of each route, not a new ending.
     from content import ENDINGS
     assert len(ENDINGS) == 6 and all(e['subtitle'].split(' · ')[0].endswith('of 6') for e in ENDINGS.values())
 

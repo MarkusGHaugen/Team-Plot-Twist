@@ -32,6 +32,10 @@ Choose **Single player** or **Multiplayer** above the game. In multiplayer one p
 - **Drugged stew:** Take the sleeping pills from the sea chest in the cabin and crush them into the galley stew. Five seconds later the cook serves it, the whole crew eats in the mess hall and falls asleep for two minutes. Take the dinghy or the helm before they wake. A gunshot or the cannon wakes them.
 - **Castaway:** Swallow the sleeping pills on the floor of your own cell. The crew think you are dead and throw you overboard in a barrel; after four days adrift you wash up on a deserted island.
 
+## The last escape
+
+Each of the six escape routes ends with its own scene, followed automatically by the mandatory cannon finale. The finale is the last scene of that route and does not change which ending you reached. Cheerful music plays as you celebrate on the beach, then cuts to the dramatic guard theme when the plot twist text reveals the guards are back. Dodge ten cannonballs fired about once a second: **W / ↑** jumps low shots and **Space / S / ↓** ducks high ones. You have three lives. Win, and cheerful music starts for the dog’s arrival in a small boat and the rescue epilogue, "Free at last"; your original ending remains recorded. If the guards catch you, choose **Try again** for a new volley. The game never resets automatically. **New Game** asks for confirmation before replacing your save. Details are in [specs/cannon-finale.md](specs/cannon-finale.md).
+
 ## Things to do aboard
 
 - **Telescope:** Climb the mast and press F at the telescope. A/D look around the horizon.
@@ -66,6 +70,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 - `app.py`: Streamlit UI and component messages.
 - `logic.py`, `voyage.py`, `escort.py`: Authoritative rules, combat and routes.
+- `finale.py`: The cannon finale (volley, judging, saves).
 - `content.py`: Items, clues, roles and ending text.
 - `db.py`: Save storage and migrations.
 - `action_transport.py`: Safe request acknowledgements and retries.

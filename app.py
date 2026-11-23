@@ -22,7 +22,8 @@ from db import apply_action, claim_legacy, connect_db, load_game, new_game, rest
 from logic import (GUARD_ROUTES, GUARD_SEGMENTS, MAP_CONFIG, Position, capture_paths,
                    state_from_backup, story_progress, game_now_ms, route_points)
 from action_transport import handle_action
-from content import DOCUMENTS, ENDINGS, ITEMS, ROLES, STORY_POINTS
+from content import DOCUMENTS, ENDINGS, FINALE_RESCUE_EPILOGUE, ITEMS, ROLES, STORY_POINTS
+import finale
 import multiplayer as mp
 import shared_ship
 from journal import journal_hints
@@ -311,7 +312,6 @@ def main():
         st.session_state.browser_backup = None
     if "browser_storage_available" not in st.session_state:
         st.session_state.browser_storage_available = True
-
     identity = browser_identity_component()(
         data={"request_identity": "player_id" not in st.session_state},
         on_identity_change=lambda: None,
@@ -365,16 +365,15 @@ def main():
             begin_play(saved, room_state["epoch_ms"])
         new_clicked = continue_clicked = False
     else:
-        start_col, continue_col, spacer = st.columns([1, 1, 3])
+        start_col, continue_col, _ = st.columns([1, 1, 3])
         with start_col:
             new_clicked = st.button("New Game", use_container_width=True, type="primary")
         with continue_col:
             continue_clicked = st.button("Continue", use_container_width=True, disabled=saved is None)
-
     if new_clicked:
         if saved is None:
             with closing(connect_db(DB_PATH)) as conn:
-                new_game(conn, player_id)
+                new_game(conn, game_id)
             begin_play(show_intro=True)
         else:
             st.session_state.confirm_new = True
@@ -389,14 +388,15 @@ def main():
         with yes_col:
             if st.button("Confirm New Game", use_container_width=True):
                 with closing(connect_db(DB_PATH)) as conn:
-                    new_game(conn, player_id)
+                    new_game(conn, game_id)
                 begin_play(show_intro=True)
                 st.rerun()
         with no_col:
             if st.button("Cancel", use_container_width=True):
                 st.session_state.confirm_new = False
                 st.rerun()
-        sync_browser_backup(player_id, saved)
+        if not room:
+            sync_browser_backup(player_id, saved)
         return
 
     if not st.session_state.playing or saved is None:
@@ -417,6 +417,8 @@ def main():
         "journal_hints": journal_hints(saved, int(time.time() * 1000)),
         "documents": DOCUMENTS,
         "endings": ENDINGS,
+        "rescue_epilogue": FINALE_RESCUE_EPILOGUE,
+        "finale": finale.public(saved),
         "roles": ROLES,
         "run_id": st.session_state.run_id,
         "intro": st.session_state.get("intro_run_id") == st.session_state.run_id,

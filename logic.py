@@ -629,6 +629,19 @@ def state_from_backup(payload: object) -> GameState | None:
     if suspect_zone and not valid_position(Position(suspect_zone,suspect_value),True): return None
     story = payload.get('story_state', '{}')
     ending = payload.get('ending', '')
+    # Older local builds used ``free`` for a won cannon finale. Migrate that
+    # backup back to its recorded escape route before normal validation.
+    if ending == 'free' and isinstance(story, str):
+        try:
+            legacy = json.loads(story)
+            old_finale = legacy.get('voyage', {}).get('finale', {})
+            origin = old_finale.get('origin')
+            if old_finale.get('status') == 'won' and origin in ENDINGS:
+                ending = origin
+                old_finale.pop('origin', None)
+                story = json.dumps(legacy, separators=(',', ':'))
+        except (ValueError, TypeError, AttributeError):
+            pass
     reading = payload.get('reading', '')
     paused_at = payload.get('paused_at_ms', 0)
     paused_total = payload.get('paused_total_ms', 0)
@@ -704,14 +717,17 @@ def state_from_backup(payload: object) -> GameState | None:
         barrel=next(b for b in BARRELS if b[0]==barrel_id)
         if kind!='sleeper' and (getattr(state,kind+'_corpse_x'),getattr(state,kind+'_corpse_y'))!=position_xy(Position(barrel[1],barrel[2])):return None
     if v.get('captain_worn') and not state.disguised:return None
-    if ending=='command' and not captain_ready(state):return None
-    if ending == 'takeover' and opponents_remaining(state): return None
-    if ending == 'crate' and not crate_ready(state): return None
-    if ending == 'dinghy':
+    cannon_finale=v.get('finale')
+    if cannon_finale is not None and not ending:return None
+    reached=ending
+    if reached=='command' and not captain_ready(state):return None
+    if reached == 'takeover' and opponents_remaining(state): return None
+    if reached == 'crate' and not crate_ready(state): return None
+    if reached == 'dinghy':
         from voyage import boat_ready
         if not boat_ready(state):return None
-    if ending == 'lullaby' and not v.get('stew_drugged'): return None
-    if ending == 'castaway' and 'sleeping_pills' not in story_progress(state)['items']: return None
+    if reached == 'lullaby' and not v.get('stew_drugged'): return None
+    if reached == 'castaway' and 'sleeping_pills' not in story_progress(state)['items']: return None
     if ending and (state.capture_phase != 'none' or state.hidden_barrel or state.in_hammock): return None
     return state if valid_position(state.position,state.door_open) else None
 
