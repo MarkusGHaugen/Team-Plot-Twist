@@ -2,6 +2,10 @@
 
 **Version 1.0.0** · A cooperative class project: escape from a pirate ship through exploration, stealth, disguise or combat.
 
+**Play online:** https://team-plot-twist.streamlit.app (the app sleeps when unused; click the wake-up button and wait about a minute).
+
+**Team:** Markus Haugen ([@MarkusGHaugen](https://github.com/MarkusGHaugen)), Magnus Monstad ([@MagnusMonstad](https://github.com/MagnusMonstad)), Casper ([@Caspergm](https://github.com/Caspergm)), Wendela Sparrman ([@wendelasparrman-lgtm](https://github.com/wendelasparrman-lgtm)) and Hannah Karlsson ([@hannahkarlsson2026](https://github.com/hannahkarlsson2026)).
+
 Start with [START_HERE.md](START_HERE.md). It explains how to download the code, run the game, and contribute with GitHub Desktop.
 
 ## Run the game
@@ -60,7 +64,7 @@ Use the toolbar for music, volume, fullscreen and confirmed restart. Each round 
 
 ## Working together
 
-Keep the GitHub repository **private** and invite only the project group as collaborators. Each person works on a feature branch and opens a pull request before merging to `main`. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the steps and versioning rules.
+The repository is **public** so anyone can read the code. Only the project group are collaborators with write access. Each person works on a feature branch and opens a pull request before merging to `main`. Read [CONTRIBUTING.md](CONTRIBUTING.md) for the steps and versioning rules.
 
 A ZIP is convenient for trying the game. A Git clone is the best way to receive and contribute updates. This project has its own version history and does not automatically sync with another project.
 
