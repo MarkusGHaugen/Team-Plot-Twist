@@ -13,7 +13,7 @@ from content import ENDINGS
 
 LIVES = 3
 BALLS = 10
-FIRST_AT_MS = 10_000        # leaves time for the beach celebration and guard reveal
+FIRST_AT_MS = 12_000        # leaves time for the celebration and longer plot twist
 GAP_MS = 1000               # rapid volley: about one second between cannonballs
 JITTER_MS = 100             # keep adjacent dodge windows separate
 END_MS = FIRST_AT_MS + (BALLS - 1) * GAP_MS + 1500
