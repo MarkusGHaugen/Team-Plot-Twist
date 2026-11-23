@@ -954,16 +954,23 @@ function expandedDecor(ctx,rules) {
 }
 
 function speechBubble(ctx,x,y,text) {
-  ctx.save();ctx.font='600 9px system-ui';const width=ctx.measureText(text).width+16;
-  roundBox(ctx,x-width/2,y-19,width,22,7,'#fff1d2','#785c3b');
-  ctx.fillStyle='#fff1d2';ctx.beginPath();ctx.moveTo(x-4,y+2);ctx.lineTo(x,y+8);ctx.lineTo(x+6,y+2);ctx.fill();
-  ctx.fillStyle='#382d25';ctx.textAlign='center';ctx.fillText(text,x,y-4);ctx.restore();
+  ctx.save();ctx.font='600 8px system-ui';const lines=Array.isArray(text)?text:[text],width=Math.max(...lines.map(lineText=>ctx.measureText(lineText).width))+14,height=lines.length>1?30:20;
+  roundBox(ctx,x-width/2,y-height+3,width,height,6,'#fff1d2','#785c3b');
+  ctx.fillStyle='#fff1d2';ctx.beginPath();ctx.moveTo(x-3,y+2);ctx.lineTo(x,y+7);ctx.lineTo(x+5,y+2);ctx.fill();
+  ctx.fillStyle='#382d25';ctx.textAlign='center';lines.forEach((lineText,index)=>ctx.fillText(lineText,x,y-(lines.length-index-1)*10-4));ctx.restore();
+}
+function speechBubbleFromRight(ctx,tipX,y,lines) {
+  ctx.save();ctx.font='600 8px system-ui';const width=Math.max(...lines.map(lineText=>ctx.measureText(lineText).width))+14,height=lines.length>1?30:20;
+  const right=tipX-12,center=right-width/2;
+  roundBox(ctx,right-width,y-height+3,width,height,6,'#fff1d2','#785c3b');
+  ctx.fillStyle='#fff1d2';ctx.beginPath();ctx.moveTo(right-2,y-3);ctx.lineTo(tipX,y+1);ctx.lineTo(right-2,y+5);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#382d25';ctx.textAlign='center';lines.forEach((lineText,index)=>ctx.fillText(lineText,center,y-(lines.length-index-1)*10-4));ctx.restore();
 }
 function thoughtBubble(ctx,x,y,text) {
-  ctx.save();ctx.font='600 9px system-ui';const width=ctx.measureText(text).width+16;
-  roundBox(ctx,x-width/2,y-26,width,23,11,'#fff8e8','#785c3b');
-  ctx.fillStyle='#fff8e8';ctx.beginPath();ctx.arc(x-7,y+1,3,0,Math.PI*2);ctx.arc(x-2,y+8,1.8,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle='#382d25';ctx.textAlign='center';ctx.fillText(text,x,y-11);ctx.restore();
+  ctx.save();ctx.font='600 8px system-ui';const width=ctx.measureText(text).width+14;
+  roundBox(ctx,x-width/2,y-23,width,20,10,'#fff8e8','#785c3b');
+  ctx.fillStyle='#fff8e8';ctx.beginPath();ctx.arc(x-25,y+1,2.8,0,Math.PI*2);ctx.arc(x-15,y+8,1.7,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#382d25';ctx.textAlign='center';ctx.fillText(text,x,y-9);ctx.restore();
 }
 function crouchingPerson(ctx,x,y,guard,elapsed,held,facing,moving,disguised,variant="patrol",style=null) {
   const prisoner=!guard&&!disguised&&!style;
@@ -1543,19 +1550,30 @@ function drawIntroCell(ctx,w,h,t,clamp01) {
   const cx=w*.52,doorW=Math.min(w*.64,470),left=cx-doorW/2,top=h*.16,bottom=h*.81;
   ctx.fillStyle='#282b27';ctx.fillRect(left,top,doorW,bottom-top);
   ctx.fillStyle='#403d33';ctx.fillRect(left+8,bottom-29,doorW-16,27);
-  // Keep the cell wall solid: the playable cell has no window.
+  // Map the bunk and porthole from the playable cell's 375-unit room width.
+  const cellScale=doorW/375,bedX=left+31*cellScale,floorY=bottom-8,frameY=floorY-44*cellScale;
+  const portholeX=left+182*cellScale,portholeY=floorY-83*cellScale,portholeR=Math.max(6,10*cellScale),portholeRim=3*cellScale;
+  ctx.fillStyle='#a38757';ctx.beginPath();ctx.arc(portholeX,portholeY,portholeR+portholeRim,0,Math.PI*2);ctx.fill();
+  ctx.save();ctx.beginPath();ctx.arc(portholeX,portholeY,portholeR,0,Math.PI*2);ctx.clip();
+  const portholeLight=ctx.createLinearGradient(portholeX-portholeR,portholeY-portholeR,portholeX+portholeR,portholeY+portholeR);
+  portholeLight.addColorStop(0,'#9bb7b4');portholeLight.addColorStop(.48,'#41616a');portholeLight.addColorStop(1,'#203c48');
+  ctx.fillStyle=portholeLight;ctx.fillRect(portholeX-portholeR,portholeY-portholeR,portholeR*2,portholeR*2);
+  ctx.fillStyle='rgba(221,235,210,.34)';ctx.beginPath();ctx.ellipse(portholeX-portholeR*.3,portholeY-portholeR*.38,portholeR*.42,portholeR*.2,-.7,0,Math.PI*2);ctx.fill();
+  line(ctx,portholeX,portholeY-portholeR,portholeX,portholeY+portholeR,'#354445',2);
+  line(ctx,portholeX-portholeR,portholeY,portholeX+portholeR,portholeY,'#354445',2);ctx.restore();
+  ctx.strokeStyle='#d3b47b';ctx.lineWidth=Math.max(1.5,2.5*cellScale);ctx.beginPath();ctx.arc(portholeX,portholeY,portholeR+1,0,Math.PI*2);ctx.stroke();
+  ctx.strokeStyle='rgba(236,215,165,.75)';ctx.lineWidth=Math.max(.7,cellScale);ctx.beginPath();ctx.arc(portholeX,portholeY,portholeR+portholeRim,Math.PI*1.1,Math.PI*1.85);ctx.stroke();
 
   // Match the game's low bunk: green-gray mattress, wooden frame, legs and pillow.
-  const bedScale=doorW/240,bedX=left+16*bedScale,floorY=bottom-8,frameY=floorY-44*bedScale;
   line(ctx,left+8,bottom-8,left+doorW-8,bottom-8,'#665744',5);
   for(let i=0;i<5;i++)line(ctx,left+12+i*doorW*.2,bottom-5,left+12+i*doorW*.2,bottom-1,'#9a7950',2);
-  roundBox(ctx,bedX+7*bedScale,floorY-68*bedScale,104*bedScale,25*bedScale,4,'#6d8180','#38423c');
-  roundBox(ctx,bedX+12*bedScale,floorY-66*bedScale,24*bedScale,14*bedScale,5,'#ded2b5','#756f60');
-  roundBox(ctx,bedX,frameY,118*bedScale,12*bedScale,2,'#a57b51','#3a2a21');
-  line(ctx,bedX+4*bedScale,frameY+11*bedScale,bedX+4*bedScale,floorY,'#583b2c',5*bedScale);
-  line(ctx,bedX+112*bedScale,frameY+11*bedScale,bedX+112*bedScale,floorY,'#583b2c',5*bedScale);
+  roundBox(ctx,bedX+7*cellScale,floorY-68*cellScale,104*cellScale,25*cellScale,4,'#6d8180','#38423c');
+  roundBox(ctx,bedX+12*cellScale,floorY-66*cellScale,24*cellScale,14*cellScale,5,'#ded2b5','#756f60');
+  roundBox(ctx,bedX,frameY,118*cellScale,12*cellScale,2,'#a57b51','#3a2a21');
+  line(ctx,bedX+4*cellScale,frameY+11*cellScale,bedX+4*cellScale,floorY,'#583b2c',5*cellScale);
+  line(ctx,bedX+112*cellScale,frameY+11*cellScale,bedX+112*cellScale,floorY,'#583b2c',5*cellScale);
   // A folded clue peeks out from beneath the bunk, as it does in the playable cell.
-  ctx.save();ctx.translate(bedX+77*bedScale,floorY-3*bedScale);ctx.rotate(-.12);roundBox(ctx,-10*bedScale,-8*bedScale,20*bedScale,13*bedScale,1,'#ebd7a6','#705937');line(ctx,-6*bedScale,-4*bedScale,6*bedScale,-4*bedScale,'#8b7a55',.8*bedScale);ctx.restore();
+  ctx.save();ctx.translate(bedX+77*cellScale,floorY-3*cellScale);ctx.rotate(-.12);roundBox(ctx,-10*cellScale,-8*cellScale,20*cellScale,13*cellScale,1,'#ebd7a6','#705937');line(ctx,-6*cellScale,-4*cellScale,6*cellScale,-4*cellScale,'#8b7a55',.8*cellScale);ctx.restore();
   // The captive is left alone, still hooded and bound. No dog appears in the brig.
   // The captive wears the same striped prison clothes as the playable character.
   const prisonerX=left+doorW*.78,prisonerY=bottom-7,prisonerScale=Math.min(1.95,w/420);
@@ -1564,7 +1582,8 @@ function drawIntroCell(ctx,w,h,t,clamp01) {
   ctx.fillStyle='#272322';ctx.beginPath();ctx.ellipse(0,-48,3.2,4.4,0,0,Math.PI*2);ctx.fill();ctx.restore();
   for(let i=0;i<7;i++)line(ctx,left+doorW*(i+.5)/7,top,left+doorW*(i+.5)/7,bottom,'#b29868',5);
   line(ctx,left,top,left,bottom,'#b29868',8);line(ctx,left+doorW,top,left+doorW,bottom,'#b29868',8);
-  if(t>=18.2&&t<22.2)speechBubble(ctx,prisonerX,prisonerY-prisonerScale*125,'Where am I...?');
+  if(t>=18.2&&t<21.5)speechBubble(ctx,prisonerX,prisonerY-prisonerScale*85,'Where am I...?');
+  if(t>=22&&t<26.5)speechBubbleFromRight(ctx,Math.min(left+doorW+100,w-8),top+76,['Be quiet – you are now a','prisoner on our pirate ship!']);
   ctx.restore();
 }
 function drawIntroScene(ctx,w,h,t) {
@@ -1603,16 +1622,16 @@ function drawIntroScene(ctx,w,h,t) {
       ctx.save();ctx.globalAlpha=pirateReveal;ctx.translate(px,py);ctx.scale(boatScale,boatScale);
       // Give each pirate ship a deep three-deck hull like the playable ship.
       ctx.fillStyle='#563c30';ctx.strokeStyle='#241e1c';ctx.lineWidth=5;ctx.beginPath();
-      ctx.moveTo(-128,5);ctx.quadraticCurveTo(0,22,128,5);ctx.lineTo(117,42);ctx.lineTo(104,78);
-      ctx.quadraticCurveTo(0,101,-104,78);ctx.lineTo(-117,42);ctx.closePath();ctx.fill();ctx.stroke();
-      for(const deckY of [13,42,70]){
+      ctx.moveTo(-128,5);ctx.quadraticCurveTo(0,22,128,5);ctx.lineTo(117,46);ctx.lineTo(106,84);
+      ctx.quadraticCurveTo(0,112,-106,84);ctx.lineTo(-117,46);ctx.closePath();ctx.fill();ctx.stroke();
+      for(const deckY of [13,38,63,88]){
         line(ctx,-112,deckY,112,deckY,'#d0a56d',3);
         for(let gunX=-88;gunX<=88;gunX+=44){
           roundBox(ctx,gunX-7,deckY+5,14,10,2,'#1d2729','#9f7951');
           ctx.fillStyle='#d2b27b';ctx.beginPath();ctx.arc(gunX,deckY+10,1.4,0,Math.PI*2);ctx.fill();
         }
       }
-      line(ctx,-126,6,126,6,'#dfbd82',4);line(ctx,-104,78,104,78,'#2d221c',4);
+      line(ctx,-126,6,126,6,'#dfbd82',4);line(ctx,-106,84,106,84,'#2d221c',4);
       // Two masts and layered sails make the vessels read as small pirate ships.
       ctx.fillStyle='#271f1d';ctx.beginPath();ctx.moveTo(-22,7);ctx.lineTo(-20,-226);ctx.lineTo(-4,-215);ctx.lineTo(-1,7);ctx.closePath();ctx.fill();
       ctx.beginPath();ctx.moveTo(48,6);ctx.lineTo(50,-168);ctx.lineTo(62,-157);ctx.lineTo(63,6);ctx.closePath();ctx.fill();
@@ -1642,15 +1661,15 @@ function drawIntroScene(ctx,w,h,t) {
     if(t>=3.3&&t<6.9)introFish(ctx,boatX+350*unit,sea+h*.025+Math.sin(t*4)*3,unit*.65);
     const dogStart=boatY-36*unit,dogWater=sea+h*.02,dy=dogStart+(dogWater-dogStart)*jump-Math.sin(Math.PI*jump)*h*.16+(t>=6.5?Math.sin(t*7)*2:0);
     const swim=clamp01((t-6.5)/.8),dx=boatX+unit*(48+310*jump+24*swim+Math.sin(t*3)*7*swim);
-    if(t<5.2){introDog(ctx,boatX+48*unit,boatY-36*unit,unit*.82,0,{fade:1});if(t>=3.5)thoughtBubble(ctx,boatX+58*unit,boatY-94*unit,'Oh, a fish! Gotta catch it!');}
+    if(t<5.2){introDog(ctx,boatX+48*unit,boatY-36*unit,unit*.82,0,{fade:1});if(t>=3.5)thoughtBubble(ctx,boatX+100*unit,boatY-94*unit,'Oh, a fish! Gotta catch it!');}
     else if(t<15.9){const dogScale=jump<1?.82:.60;introDog(ctx,dx,dy,unit*dogScale,jump<1?-.35*jump:.02*Math.sin(t*4),{wet:t>=6.5,fade:dogFade,paddling:t});
-      if(t>=6.4&&t<9){ctx.save();ctx.strokeStyle='rgba(230,245,237,.9)';ctx.lineWidth=3;for(let i=0;i<7;i++){ctx.beginPath();ctx.arc(dx+(i-3)*12,dy-8,6+i%2*5,Math.PI*1.1,Math.PI*1.9);ctx.stroke();}ctx.restore();}}
+      if(t>=6.4&&t<9){const splashFade=1-clamp01((t-6.4)/2.6);ctx.save();ctx.globalAlpha=splashFade;ctx.strokeStyle='rgba(230,245,237,.78)';ctx.lineWidth=2;for(let i=0;i<5;i++){const ripple=clamp01((t-6.4)*.52+i*.18),rx=5+ripple*17,ry=1.5+ripple*3;ctx.beginPath();ctx.ellipse(dx+(i-2)*9,sea+4+Math.sin(i*1.7)*1.5,rx,ry,0,Math.PI,Math.PI*2);ctx.stroke();}ctx.restore();}}
     if(t>=8.5&&t<15.9){
       const dive=clamp01((t-8.5)/1.35),diveEase=dive*dive*(3-2*dive),startX=boatX-46*unit;
       const hx=startX+(boatX+unit*390-startX)*diveEase+Math.sin(t*2)*4*dive,hy=boatY-26*unit+(sea+h*.02-(boatY-26*unit))*diveEase-Math.sin(Math.PI*dive)*h*.16+(t>=8.05?Math.sin(t*5)*3:0);
       ctx.save();ctx.translate(hx,hy);ctx.rotate(Math.PI/2*diveEase);introPerson(ctx,0,0,unit,{reach:1,checked:true,color:'#2d6b73'});ctx.restore();
       // Keep wake rings in the sea, only after the dive reaches the water.
-      if(dive>=1){const waveY=sea+7;ctx.save();ctx.strokeStyle='rgba(230,245,237,.82)';ctx.lineWidth=3;for(let i=0;i<8;i++){ctx.beginPath();ctx.arc(hx+(i-4)*15,waveY+Math.sin(t*3+i)*2,5+i%2*5,Math.PI*1.1,Math.PI*1.9);ctx.stroke();}ctx.restore();}
+      if(dive>=1){const waveY=sea+4;ctx.save();ctx.strokeStyle='rgba(230,245,237,.72)';ctx.lineWidth=2;for(let i=0;i<8;i++){ctx.beginPath();ctx.ellipse(hx+(i-4)*15,waveY+Math.sin(t*3+i),5+i%2*3,2+i%2,0,Math.PI,Math.PI*2);ctx.stroke();}ctx.restore();}
     }
   }
   ctx.restore();
