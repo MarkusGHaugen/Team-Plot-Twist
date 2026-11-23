@@ -317,8 +317,13 @@ def main():
         div[data-testid="stButton"] button:not([kind="primary"]), [data-testid="stBaseButton-secondary"] {
           color:#17272d !important; background:#fff8e8 !important; border:2px solid #e7d4a7 !important;
           font-size:1.05rem; font-weight:800; text-shadow:none; }
+        div[data-testid="stButton"] button[kind="primary"] *, [data-testid="stBaseButton-primary"] *,
+        div[data-testid="stButton"] button:not([kind="primary"]) *, [data-testid="stBaseButton-secondary"] * {
+          color:#17272d !important; -webkit-text-fill-color:#17272d !important; opacity:1 !important; }
         div[data-testid="stButton"] button:disabled, [data-testid="stBaseButton-secondary"]:disabled {
           color:#354247 !important; background:#e6dcc5 !important; border-color:#cbbd9b !important; opacity:1 !important; }
+        div[data-testid="stButton"] button:disabled *, [data-testid="stBaseButton-secondary"]:disabled * {
+          color:#354247 !important; -webkit-text-fill-color:#354247 !important; opacity:1 !important; }
         div[data-testid="stButton"] button:hover:not(:disabled) { filter:brightness(.96); }
         [data-testid="stExpander"] { border-color:#2d454d; border-radius:10px; }
         [data-testid="stAlert"] { border-radius: 12px; background: rgba(37,62,70,.88); color: #f1eadb; }
