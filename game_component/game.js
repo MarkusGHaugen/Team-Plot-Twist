@@ -67,7 +67,7 @@ function musicEngine() {
     }
     m.sceneMusicStarted=finaleSceneMusic;
     const tense=data.capture_phase==='active'||gameNow(data)<data.alert_until_ms||(data.story?.voyage?.armed&&(data.sleeper_alive||Object.keys(data.guard_routes||{}).some(k=>data[k+'_alive'])));
-    const mode=finaleRescue?'explore':finaleDark?'alert':finaleCelebration?'explore':data.ending?'ending':introActive?(introTime>=15.3?'alert':'explore'):tense?'alert':'explore';
+    const mode=finaleRescue?'explore':finaleDark?'alert':finaleCelebration?'explore':data.ending?'ending':introActive?(introTime>=13.3?'alert':'explore'):tense?'alert':'explore';
     if(mode!==m.mode){if(mode==='alert'&&m.tracks)m.tracks.alert.currentTime=0;if(mode==='explore'&&m.tracks&&(finaleRescue||data.finale?.status==='lost'))m.tracks.explore.currentTime=0;m.mode=mode;}
     m.sync();
   };
@@ -1435,12 +1435,12 @@ function snapshot(position) {
   return { zone: position.zone, value: Math.round(position.value * 1000) / 1000 };
 }
 function introCaption(t) {
-  if(t<7)return 'A peaceful morning. You sit and fish with your dog.';
-  if(t<11)return 'A flash below the water—the dog spots a fish and leaps into the waves!';
-  if(t<12)return 'Your dog splashes into the water. For a moment, you hesitate…';
-  if(t<15.3)return 'You spring from the boat and dive after him, reaching through the waves.';
-  if(t<19.4)return 'Small pirate boats surround you and your dog. The pirates close in.';
-  if(t<22.5)return '';
+  if(t<5)return 'A peaceful morning. You sit and fish with your dog.';
+  if(t<9)return 'A flash below the water—the dog spots a fish and leaps into the waves!';
+  if(t<10)return 'Your dog splashes into the water. For a moment, you hesitate…';
+  if(t<13.3)return 'You spring from the boat and dive after him, reaching through the waves.';
+  if(t<17.4)return 'Small pirate boats surround you and your dog. The pirates close in.';
+  if(t<20.5)return '';
   if(t<29)return 'You wake in the cell, frightened and alone.';
   return 'The adventure begins.';
 }
@@ -1529,7 +1529,7 @@ function introPirate(ctx,x,y,scale=1) {
   line(ctx,12,-26,30,-54,'#d9e0e4',3);line(ctx,12,-26,20,-21,'#9a7948',4);line(ctx,30,-54,34,-61,'#fff0cb',2);ctx.restore();
 }
 function drawIntroCell(ctx,w,h,t,clamp01) {
-  const fade=clamp01((t-21.3)/1.2);if(!fade)return;
+  const fade=clamp01((t-19.3)/1.2);if(!fade)return;
   ctx.save();ctx.globalAlpha=fade;ctx.fillStyle='#101c20';ctx.fillRect(0,0,w,h);
   const wall=ctx.createLinearGradient(0,0,0,h);wall.addColorStop(0,'#344248');wall.addColorStop(1,'#191e20');ctx.fillStyle=wall;ctx.fillRect(0,0,w,h);
   for(let y=34;y<h;y+=48)line(ctx,0,y,w,y,'#4f4b3e',3);
@@ -1562,13 +1562,13 @@ function drawIntroCell(ctx,w,h,t,clamp01) {
 function drawIntroScene(ctx,w,h,t) {
   const clamp01=x=>Math.max(0,Math.min(1,x));
   const mix=(a,b,f)=>Math.round(a+(b-a)*f);
-  const dawn=clamp01(t/7),pirateFog=clamp01((t-15.3)/.45),cellFade=clamp01((t-21.3)/1.2),sea=h*.53;
+  const dawn=clamp01(t/7),pirateFog=clamp01((t-13.3)/.45),cellFade=clamp01((t-19.3)/1.2),sea=h*.53;
   const boatX=w*.44,boatY=sea-h*.035,unit=Math.min(w/900,h/500);
-  const jump=clamp01((t-8.7)/1.3),pirateReveal=clamp01((t-15.3)/1.8),zoom=t<8?1.55:t<10.5?1.55+.75*clamp01((t-8)/2.5):t<15.2?2.3-.75*clamp01((t-10.5)/4.7):t<17.7?1.55-.6*clamp01((t-15.2)/2.5):t<19.4? .95:1;
+  const jump=clamp01((t-6.7)/1.3),pirateReveal=clamp01((t-13.3)/1.8),zoom=t<6?1.55:t<8.5?1.55+.75*clamp01((t-6)/2.5):t<13.2?2.3-.75*clamp01((t-8.5)/4.7):t<15.7?1.55-.6*clamp01((t-13.2)/2.5):t<17.4? .95:1;
   let focusX=boatX,focusY=boatY-h*.07;
-  if(t>=8&&t<11.2){const f=clamp01((t-8)/.9);focusX=boatX+unit*(92+250*clamp01((t-8.7)/1.3))*f;focusY=sea+h*.02;}
-  else if(t>=11.2&&t<15.2){focusX=boatX+unit*170;focusY=sea+h*.02;}
-  else if(t>=15.2&&t<19.4){const reveal=clamp01((t-15.2)/2.5),wideFocus=boatX+unit*170;focusX=wideFocus+(w*.5-wideFocus)*reveal;focusY=sea+h*.02+(sea-h*.08-(sea+h*.02))*reveal;}
+  if(t>=6&&t<9.2){const f=clamp01((t-6)/.9);focusX=boatX+unit*(92+250*clamp01((t-6.7)/1.3))*f;focusY=sea+h*.02;}
+  else if(t>=9.2&&t<13.2){focusX=boatX+unit*170;focusY=sea+h*.02;}
+  else if(t>=13.2&&t<17.4){const reveal=clamp01((t-13.2)/2.5),wideFocus=boatX+unit*170;focusX=wideFocus+(w*.5-wideFocus)*reveal;focusY=sea+h*.02+(sea-h*.08-(sea+h*.02))*reveal;}
   ctx.save();ctx.translate(w*.5,h*.5);ctx.scale(zoom,zoom);ctx.translate(-focusX,-focusY);
   const sky=ctx.createLinearGradient(0,0,0,h);
   const skyTop=[mix(mix(38,92,dawn),116,pirateFog),mix(mix(64,159,dawn),123,pirateFog),mix(mix(93,205,dawn),128,pirateFog)];
@@ -1591,37 +1591,54 @@ function drawIntroScene(ctx,w,h,t) {
     const positions=[[w*.14,.32],[w*.38,.29],[w*.62,.3],[w*.91,.33]];
     ctx.save();ctx.beginPath();ctx.rect(-w,-h,w*3,sea+h);ctx.clip();
     positions.forEach(([sx,ss],i)=>{
-      const approach=clamp01((t-15.5-i*.2)/1.35),px=sx+(w*.5-sx)*approach*(i===3?.08:.25),boatScale=ss*unit*2.3,py=sea-boatScale*8+Math.sin(t*2+i)*1.5;
+      const approach=clamp01((t-13.5-i*.2)/1.35),px=sx+(w*.5-sx)*approach*(i===3?.08:.25),boatScale=ss*unit*2.3,py=sea-boatScale*48+Math.sin(t*2+i)*1.5;
       ctx.save();ctx.globalAlpha=pirateReveal;ctx.translate(px,py);ctx.scale(boatScale,boatScale);
-      ctx.fillStyle='#563c30';ctx.strokeStyle='#241e1c';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-125,-6);ctx.quadraticCurveTo(0,22,125,-6);ctx.lineTo(99,25);ctx.quadraticCurveTo(0,43,-99,25);ctx.closePath();ctx.fill();ctx.stroke();
-      ctx.fillStyle='#271f1d';ctx.beginPath();ctx.moveTo(-22,-5);ctx.lineTo(-20,-148);ctx.lineTo(0,-135);ctx.closePath();ctx.fill();ctx.beginPath();ctx.moveTo(23,-5);ctx.lineTo(20,-132);ctx.lineTo(48,-30);ctx.closePath();ctx.fill();
+      // Give each pirate ship a deep three-deck hull like the playable ship.
+      ctx.fillStyle='#563c30';ctx.strokeStyle='#241e1c';ctx.lineWidth=5;ctx.beginPath();
+      ctx.moveTo(-128,5);ctx.quadraticCurveTo(0,22,128,5);ctx.lineTo(117,42);ctx.lineTo(104,78);
+      ctx.quadraticCurveTo(0,101,-104,78);ctx.lineTo(-117,42);ctx.closePath();ctx.fill();ctx.stroke();
+      for(const deckY of [13,42,70]){
+        line(ctx,-112,deckY,112,deckY,'#d0a56d',3);
+        for(let gunX=-88;gunX<=88;gunX+=44){
+          roundBox(ctx,gunX-7,deckY+5,14,10,2,'#1d2729','#9f7951');
+          ctx.fillStyle='#d2b27b';ctx.beginPath();ctx.arc(gunX,deckY+10,1.4,0,Math.PI*2);ctx.fill();
+        }
+      }
+      line(ctx,-126,6,126,6,'#dfbd82',4);line(ctx,-104,78,104,78,'#2d221c',4);
+      // Two masts and layered sails make the vessels read as small pirate ships.
+      ctx.fillStyle='#271f1d';ctx.beginPath();ctx.moveTo(-22,7);ctx.lineTo(-20,-226);ctx.lineTo(-4,-215);ctx.lineTo(-1,7);ctx.closePath();ctx.fill();
+      ctx.beginPath();ctx.moveTo(48,6);ctx.lineTo(50,-168);ctx.lineTo(62,-157);ctx.lineTo(63,6);ctx.closePath();ctx.fill();
+      line(ctx,-20,-194,58,-194,'#392b24',5);line(ctx,-20,-128,70,-128,'#392b24',4);
+      ctx.fillStyle='#ead9b5';ctx.beginPath();ctx.moveTo(-17,-189);ctx.quadraticCurveTo(17,-180,55,-189);ctx.lineTo(48,-134);ctx.quadraticCurveTo(19,-126,-14,-136);ctx.closePath();ctx.fill();
+      ctx.beginPath();ctx.moveTo(-16,-122);ctx.quadraticCurveTo(21,-115,67,-122);ctx.lineTo(61,-72);ctx.quadraticCurveTo(21,-66,-12,-74);ctx.closePath();ctx.fill();
+      ctx.beginPath();ctx.moveTo(52,-154);ctx.quadraticCurveTo(83,-146,111,-154);ctx.lineTo(104,-110);ctx.quadraticCurveTo(82,-104,55,-111);ctx.closePath();ctx.fill();
       // Each mast flies a small black Jolly Roger with a white skull and crossed bones.
-      line(ctx,-20,-146,-20,-166,'#392b24',2.5);
-      ctx.fillStyle='#17191a';ctx.beginPath();ctx.moveTo(-19,-165);ctx.quadraticCurveTo(-3,-161,1,-155);ctx.quadraticCurveTo(-8,-148,-19,-149);ctx.closePath();ctx.fill();
-      ctx.fillStyle='#e7dfc9';ctx.beginPath();ctx.arc(-11,-158,3.2,0,Math.PI*2);ctx.fill();
-      line(ctx,-15,-153,-8,-149,'#e7dfc9',1.5);line(ctx,-15,-149,-8,-153,'#e7dfc9',1.5);
+      line(ctx,-20,-226,-20,-248,'#392b24',2.5);
+      ctx.fillStyle='#17191a';ctx.beginPath();ctx.moveTo(-19,-247);ctx.quadraticCurveTo(-3,-243,1,-237);ctx.quadraticCurveTo(-8,-230,-19,-231);ctx.closePath();ctx.fill();
+      ctx.fillStyle='#e7dfc9';ctx.beginPath();ctx.arc(-11,-240,3.2,0,Math.PI*2);ctx.fill();
+      line(ctx,-15,-235,-8,-231,'#e7dfc9',1.5);line(ctx,-15,-231,-8,-235,'#e7dfc9',1.5);
       // One pirate stands on each deck, dressed like the game's red-coated guards.
       introPirate(ctx,0,8,1.05);line(ctx,-19,-122,29,-94,'rgba(231,211,164,.7)',2);ctx.restore();
     });
     ctx.restore();
   }
-  const dogFade=1-clamp01((t-19.4)/.8);
-  if(t<19.4){
-    if(t<14.3){
-      introSkiff(ctx,boatX,boatY,unit,t<12?{reach:t>=11.65?1:0,seated:true,checked:true}:null,null,t);
+  const dogFade=1-clamp01((t-17.4)/.8);
+  if(t<17.4){
+    if(t<12.3){
+      introSkiff(ctx,boatX,boatY,unit,t<10?{reach:t>=9.65?1:0,seated:true,checked:true}:null,null,t);
       // Let the water cover the submerged half of the hull and the character's legs.
       const surface=ctx.createLinearGradient(0,sea,0,h);surface.addColorStop(0,'#287185');surface.addColorStop(1,'#102f42');ctx.fillStyle=surface;ctx.fillRect(0,sea,w,h-sea);
       line(ctx,0,sea+2,w,sea+2,'rgba(230,222,188,.42)',2);
     }
-    if(t>=6.8&&t<10.4)introFish(ctx,boatX+350*unit,sea+h*.025+Math.sin(t*4)*3,unit*.65);
-    const dogStart=boatY-36*unit,dogWater=sea+h*.02,dy=dogStart+(dogWater-dogStart)*jump-Math.sin(Math.PI*jump)*h*.16+(t>=10?Math.sin(t*7)*2:0);
-    const swim=clamp01((t-10)/.8),dx=boatX+unit*(48+310*jump+24*swim+Math.sin(t*3)*7*swim);
-    if(t<8.7)introDog(ctx,boatX+48*unit,boatY-36*unit,unit*.82,0,{fade:1});
-    else if(t<19.4){const dogScale=jump<1?.82:.60;introDog(ctx,dx,dy,unit*dogScale,jump<1?-.35*jump:.02*Math.sin(t*4),{wet:t>=10,fade:dogFade,paddling:t});
-      if(t>=9.9&&t<12.5){ctx.save();ctx.strokeStyle='rgba(230,245,237,.9)';ctx.lineWidth=3;for(let i=0;i<7;i++){ctx.beginPath();ctx.arc(dx+(i-3)*12,dy-8,6+i%2*5,Math.PI*1.1,Math.PI*1.9);ctx.stroke();}ctx.restore();}}
-    if(t>=12&&t<19.4){
-      const dive=clamp01((t-12)/1.35),diveEase=dive*dive*(3-2*dive),startX=boatX-46*unit;
-      const hx=startX+(boatX+unit*390-startX)*diveEase+Math.sin(t*2)*4*dive,hy=boatY-26*unit+(sea+h*.02-(boatY-26*unit))*diveEase-Math.sin(Math.PI*dive)*h*.16+(t>=11.55?Math.sin(t*5)*3:0);
+    if(t>=4.8&&t<8.4)introFish(ctx,boatX+350*unit,sea+h*.025+Math.sin(t*4)*3,unit*.65);
+    const dogStart=boatY-36*unit,dogWater=sea+h*.02,dy=dogStart+(dogWater-dogStart)*jump-Math.sin(Math.PI*jump)*h*.16+(t>=8?Math.sin(t*7)*2:0);
+    const swim=clamp01((t-8)/.8),dx=boatX+unit*(48+310*jump+24*swim+Math.sin(t*3)*7*swim);
+    if(t<6.7)introDog(ctx,boatX+48*unit,boatY-36*unit,unit*.82,0,{fade:1});
+    else if(t<17.4){const dogScale=jump<1?.82:.60;introDog(ctx,dx,dy,unit*dogScale,jump<1?-.35*jump:.02*Math.sin(t*4),{wet:t>=8,fade:dogFade,paddling:t});
+      if(t>=7.9&&t<10.5){ctx.save();ctx.strokeStyle='rgba(230,245,237,.9)';ctx.lineWidth=3;for(let i=0;i<7;i++){ctx.beginPath();ctx.arc(dx+(i-3)*12,dy-8,6+i%2*5,Math.PI*1.1,Math.PI*1.9);ctx.stroke();}ctx.restore();}}
+    if(t>=10&&t<17.4){
+      const dive=clamp01((t-10)/1.35),diveEase=dive*dive*(3-2*dive),startX=boatX-46*unit;
+      const hx=startX+(boatX+unit*390-startX)*diveEase+Math.sin(t*2)*4*dive,hy=boatY-26*unit+(sea+h*.02-(boatY-26*unit))*diveEase-Math.sin(Math.PI*dive)*h*.16+(t>=9.55?Math.sin(t*5)*3:0);
       ctx.save();ctx.translate(hx,hy);ctx.rotate(Math.PI/2*diveEase);introPerson(ctx,0,0,unit,{reach:1,checked:true,color:'#2d6b73'});ctx.restore();
       // Keep wake rings in the sea, only after the dive reaches the water.
       if(dive>=1){const waveY=sea+7;ctx.save();ctx.strokeStyle='rgba(230,245,237,.82)';ctx.lineWidth=3;for(let i=0;i<8;i++){ctx.beginPath();ctx.arc(hx+(i-4)*15,waveY+Math.sin(t*3+i)*2,5+i%2*5,Math.PI*1.1,Math.PI*1.9);ctx.stroke();}ctx.restore();}
@@ -1629,8 +1646,8 @@ function drawIntroScene(ctx,w,h,t) {
   }
   ctx.restore();
   if(cellFade>0)drawIntroCell(ctx,w,h,t,clamp01);
-  if(t>=19.4&&t<22.5){
-    const darkness=t<20.4?clamp01((t-19.4)/1):t<21.3?1:1-clamp01((t-21.3)/1.2);ctx.fillStyle=`rgba(0,0,0,${darkness})`;ctx.fillRect(0,0,w,h);
+  if(t>=17.4&&t<20.5){
+    const darkness=t<18.4?clamp01((t-17.4)/1):t<19.3?1:1-clamp01((t-19.3)/1.2);ctx.fillStyle=`rgba(0,0,0,${darkness})`;ctx.fillRect(0,0,w,h);
   }
   if(t>=28.6){
     ctx.save();ctx.globalAlpha=clamp01((t-28.6)/.8);ctx.fillStyle='rgba(5,12,16,.4)';ctx.fillRect(0,0,w,h);
@@ -1947,7 +1964,7 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
     if(client.actionInFlight&&client.inFlightPayload&&now-client.lastDeliveryAt>1500)deliver(client.inFlightPayload);
     const introTime=introProgress(client,now);
     music.touch(client.data,introTime!==null,introTime??0,finaleDarkNow(client.data,client.fin),finaleCelebrationNow(client.data,client.fin),finaleRescueNow(client.data));
-    if(introTime!==null&&introTime>=9.9&&!client.introSplashPlayed){client.introSplashPlayed=true;music.playSplash();}
+    if(introTime!==null&&introTime>=7.9&&!client.introSplashPlayed){client.introSplashPlayed=true;music.playSplash();}
     if(music.error&&music.error!==client.musicError){client.flashText=music.error;client.flashUntil=now+6000;}client.musicError=music.error;
     musicButton.textContent=music.enabled?'Music: on ♫':'Music: off ♫';musicButton.setAttribute?.('aria-pressed',String(music.enabled));
     introMusicButton.textContent=music.enabled?'Sound: on ♫':'Sound: off ♫';introMusicButton.setAttribute('aria-pressed',String(music.enabled));
