@@ -26,6 +26,8 @@ def async_canvas(expression):
 MOCK=r'''
 let count=0,interval,clock=1000;
 globalThis.document={hidden:false,baseURI:'https://example.com/~/+/'};
+globalThis.performance={now:()=>1000};
+globalThis.window={AudioContext:class {constructor(){this.currentTime=0;this.sampleRate=48000;this.destination={};this.state='running';}createOscillator(){return {type:'',frequency:{setValueAtTime(){}},connect(){},start(){},stop(){}};}createGain(){return {gain:{setValueAtTime(){},exponentialRampToValueAtTime(){}},connect(){}};}resume(){return Promise.resolve();}}};
 globalThis.Date={now:()=>clock};globalThis.setInterval=fn=>{interval=fn;return 1};globalThis.clearInterval=()=>{};
 globalThis.Audio=class {constructor(src){count++;this.src=src;this.currentTime=0;this.paused=true;this.error=null;}addEventListener(){}pause(){this.paused=true;}play(){this.paused=false;return Promise.resolve();}};
 const calm={run_id:'one',capture_phase:'none',alert_until_ms:0,guard_routes:{},story:{}};
@@ -52,9 +54,26 @@ def test_rescue_restarts_the_cheerful_track():
  result=async_canvas('(async()=>{'+MOCK+r'''
  const m=musicEngine();m.touch(calm);
  m.touch({...calm,ending:'castaway',finale:{status:'won'}},false,0,false,false,true);
- return {enabled:m.enabled,mode:m.mode,time:m.tracks.explore.currentTime,playing:!m.tracks.explore.paused};
+ return {enabled:m.enabled,mode:m.mode,explorePaused:m.tracks.explore.paused,alertPaused:m.tracks.alert.paused,victoryTimer:Boolean(m.victoryTimer)};
  })()''')
- assert result==dict(enabled=True,mode='explore',time=0,playing=True)
+ assert result==dict(enabled=True,mode='victory',explorePaused=True,alertPaused=True,victoryTimer=True)
+
+def test_all_six_escape_cinematics_play_happy_music():
+ result=async_canvas('(()=>{'+MOCK+r'''
+ const routes=['takeover','crate','dinghy','command','lullaby','castaway'];
+ return routes.map(ending=>escapeEndingMusicNow({ending,finale:null},{data:{ending,finale:null},endingStartedAt:0}));
+ })()''')
+ assert result==[True]*6
+
+def test_escape_scene_starts_happy_track_then_silences_after_scene():
+ result=async_canvas('(()=>{'+MOCK+r'''
+ const m=musicEngine(),data={...calm,ending:'dinghy',finale:null};
+ m.touch(data,false,0,false,false,false,true);
+ const scene={enabled:m.enabled,mode:m.mode,playing:!m.tracks.explore.paused};
+ m.touch({...data,finale:{status:'active'}},false,0,false,false,false,false);
+ return {scene,after:m.mode,paused:m.tracks.explore.paused};
+ })()''')
+ assert result==dict(scene=dict(enabled=True,mode='explore',playing=True),after='ending',paused=True)
 
 def test_beach_celebration_starts_cheerful_music_automatically_then_turns_dramatic():
  result=async_canvas('(async()=>{'+MOCK+r'''
@@ -65,18 +84,18 @@ def test_beach_celebration_starts_cheerful_music_automatically_then_turns_dramat
  m.touch({...calm,ending:'castaway',finale:{status:'active'}},false,0,true,false,false);
  const twist={mode:m.mode,dramatic:!m.tracks.alert.paused,cheerfulPaused:m.tracks.explore.paused};
  m.touch({...calm,ending:'castaway',finale:{status:'won'}},false,0,false,false,true);
- return {cell,beach,twist,rescue:{mode:m.mode,cheerful:!m.tracks.explore.paused,dramaticPaused:m.tracks.alert.paused}};
+ return {cell,beach,twist,rescue:{mode:m.mode,cheerfulPaused:m.tracks.explore.paused,dramaticPaused:m.tracks.alert.paused,victoryTimer:Boolean(m.victoryTimer)}};
  })()''')
- assert result==dict(cell=dict(enabled=False,tracks=None),beach=dict(enabled=True,mode='explore',playing=True),twist=dict(mode='alert',dramatic=True,cheerfulPaused=True),rescue=dict(mode='explore',cheerful=True,dramaticPaused=True))
+ assert result==dict(cell=dict(enabled=False,tracks=None),beach=dict(enabled=True,mode='explore',playing=True),twist=dict(mode='alert',dramatic=True,cheerfulPaused=True),rescue=dict(mode='victory',cheerfulPaused=True,dramaticPaused=True,victoryTimer=True))
 
 def test_replacing_music_engine_stops_the_previous_players():
  result=async_canvas('( ()=>{'+MOCK+r'''
  let stopped=0;
- globalThis.__teamPlotTwistMusic={version:6,enabled:true,timer:null,stop(){stopped++;},ctx:null};
+ globalThis.__teamPlotTwistMusic={version:8,enabled:true,timer:null,stop(){stopped++;},ctx:null};
  const current=musicEngine();
  return {version:current.version,stopped,oldEnabled:globalThis.__teamPlotTwistMusic.enabled};
  })()''')
- assert result==dict(version=7,stopped=1,oldEnabled=False)
+ assert result==dict(version=9,stopped=1,oldEnabled=False)
 
 def test_failed_playback_turns_off_and_reports_error():
  result=async_canvas('(async()=>{'+MOCK+r'''

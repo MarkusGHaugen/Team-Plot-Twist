@@ -403,17 +403,21 @@ def test_canvas_finale_constants_match_the_server():
 
 def test_cannonballs_are_spaced_about_one_second_apart():
     assert finale.GAP_MS == 1000
-    assert finale.END_MS == 20_500
+    assert finale.FIRST_AT_MS == 12_000
+    assert finale.END_MS == 22_500
 
 
 @pytest.mark.skipif(NODE is None, reason='Node is needed to execute the actual Canvas rules')
 def test_beach_music_switches_from_celebration_to_the_guard_theme():
     data = {'ending': 'castaway', 'finale': {'status': 'active'}}
     assert canvas('finaleCelebrationNow(input.data,{t:1000})', {'data': data})
-    assert not canvas('finaleDarkNow(input.data,{t:6699})', {'data': data})
-    assert canvas('finaleDarkNow(input.data,{t:6700})', {'data': data})
-    assert canvas('finaleCelebrationNow(input.data,{t:6699})', {'data': data})
-    assert not canvas('finaleCelebrationNow(input.data,{t:6700})', {'data': data})
+    assert canvas('BEACH_CELEBRATION_MS', {}) == 10500
+    assert canvas('BEACH_TWIST_MS', {}) == 4800
+    assert canvas('BEACH_MUSIC_SWITCH_MS', {}) == 5700
+    assert canvas('finaleCelebrationNow(input.data,{t:5699})', {'data': data})
+    assert not canvas('finaleDarkNow(input.data,{t:5699})', {'data': data})
+    assert canvas('finaleDarkNow(input.data,{t:5700})', {'data': data})
+    assert not canvas('finaleCelebrationNow(input.data,{t:5700})', {'data': data})
 
 
 @pytest.mark.skipif(NODE is None, reason='Node is needed to execute the actual Canvas rules')

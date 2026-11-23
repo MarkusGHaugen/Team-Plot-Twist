@@ -5,8 +5,9 @@ Acceptance notes. Written before any code, as `AGENTS.md` asks. Numbers in **bol
 ## The story beat
 
 - Any of the six escape endings plays its existing scene, then cuts to a shared beach scene: the player stands on the sand and celebrates being free.
+- Each of the six original escape scenes now has cheerful exploration music. On the beach, the brief **Free at last!** celebration lasts about **5.7 seconds**, followed by a **4.8-second** plot twist scene so players can read the reveal.
 - Cheerful exploration music plays while the player celebrates being free on the beach. It cuts to the dark, dramatic guard theme exactly when the **"PLOT TWIST: THE GUARDS ARE BACK!"** text appears.
-- After the final cannonball is dodged, the cheerful exploration track starts automatically, even if music was off during play, as the dog arrives to rescue the player.
+- After the final cannonball is dodged, a bright, locally synthesized victory fanfare starts automatically, even if music was off during play, as the dog arrives to rescue the player. It replaces the other tracks for the rescue scene.
 - After the beach reveal, the player has to dodge **10** cannonballs. On a win, a small boat arrives with the dog from the intro. This is the rescue epilogue of the reached route, not another ending.
 - On a loss, show **"Caught by the cannons!"** and a **Try again** button. Retrying starts a fresh volley; it does not reset the game.
 
@@ -75,7 +76,7 @@ Acceptance notes. Written before any code, as `AGENTS.md` asks. Numbers in **bol
 ## Decisions taken (change them if the group disagrees)
 
 - Endings that trigger it: **all six**. The finale starts a few seconds after the ending's own scene ends.
-- Lives: **3**. Volley: **10 balls over about 20.5 seconds**, with a small random jitter in the timing that the server fixes with the seed.
+- Lives: **3**. Volley: **10 balls over about 22.5 seconds**, with a small random jitter in the timing that the server fixes with the seed.
 - On a loss: show the caught screen and let the player retry the cannon volley without resetting the game.
 - Multiplayer: the ship is shared, so the finale is shared. Both players see the same volley and play it on their own screens; whoever's report reaches the server first decides the result for both.
 - Known limit: the server judges the moves the page reports and checks the timing window and that enough time has passed, but it cannot see the keyboard. A player who edits the page could send perfect moves. That is acceptable for a class game; the rules and saves are still validated on the server.

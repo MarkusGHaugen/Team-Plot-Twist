@@ -16,9 +16,9 @@ const ZONE_NAMES = {
 
 function musicEngine() {
   const previous=globalThis.__teamPlotTwistMusic;
-  if(previous?.version===7)return previous;
+  if(previous?.version===9)return previous;
   if(previous){previous.enabled=false;previous.stop?.();if(previous.timer)clearInterval(previous.timer);previous.ctx?.close?.();}
-  const m={version:7,enabled:false,volume:.22,mode:'explore',timer:null,lastTouch:0,runId:null,active:null,error:'',tracks:null,sfxCtx:null,sceneMusicStarted:false};
+  const m={version:9,enabled:false,volume:.22,mode:'explore',timer:null,lastTouch:0,runId:null,active:null,error:'',tracks:null,sfxCtx:null,sceneMusicStarted:false,victoryTimer:null,victoryStep:0};
   try {const saved=Number(localStorage.getItem('team-pt-music-volume')??.22);if(Number.isFinite(saved))m.volume=Math.max(0,Math.min(.6,saved));}catch(_){}
   m.ensureTracks=()=>{
     if(m.tracks)return;
@@ -28,14 +28,37 @@ function musicEngine() {
       audio.addEventListener('error',()=>{m.error='Music could not load. Click Music to retry.';m.enabled=false;m.stop();});
     }
   };
-  m.stop=()=>{if(m.timer){clearInterval(m.timer);m.timer=null;}if(m.tracks)for(const audio of Object.values(m.tracks))audio.pause();m.active=null;};
+  m.stop=()=>{if(m.timer){clearInterval(m.timer);m.timer=null;}m.stopVictory();if(m.tracks)for(const audio of Object.values(m.tracks))audio.pause();m.active=null;};
+  m.stopVictory=()=>{if(m.victoryTimer){clearInterval(m.victoryTimer);m.victoryTimer=null;}};
+  m.playVictoryNote=(frequency,when,duration,wave='triangle',level=.11)=>{
+    const ac=m.ensureSfx();if(!ac)return;
+    const osc=ac.createOscillator(),gain=ac.createGain();osc.type=wave;osc.frequency.setValueAtTime(frequency,when);
+    gain.gain.setValueAtTime(.001,when);gain.gain.exponentialRampToValueAtTime(Math.max(.002,m.volume*level),when+.025);gain.gain.exponentialRampToValueAtTime(.001,when+duration);
+    osc.connect(gain);gain.connect(ac.destination);osc.start(when);osc.stop(when+duration+.02);
+  };
+  m.startVictory=()=>{
+    const ac=m.ensureSfx();if(!ac||m.victoryTimer)return;
+    // A bright C-major fanfare loop, synthesized locally so the rescue has its own
+    // celebratory sound and never overlaps either recorded soundtrack.
+    const melody=[659,784,988,784,880,988,1319,1175,1047,988,784,880,988,1319,1568,1319];
+    const bass=[262,330,392,330];
+    const playStep=()=>{
+      if(!m.enabled||document.hidden||m.mode!=='victory'){m.stopVictory();return;}
+      const step=m.victoryStep++%melody.length,at=ac.currentTime+.02;
+      m.playVictoryNote(melody[step],at,.24,'triangle',.14);
+      if(step%4===0){const root=bass[Math.floor(step/4)%bass.length];m.playVictoryNote(root,at,.8,'sine',.18);m.playVictoryNote(root*1.5,at,.62,'sine',.07);}
+    };
+    m.victoryStep=0;playStep();m.victoryTimer=setInterval(playStep,280);
+  };
   m.sync=()=>{
     if(!m.tracks)return;
-    const wanted=m.enabled&&!document.hidden&&m.mode!=='ending'?m.mode:null;
+    const wanted=m.enabled&&!document.hidden?(m.mode==='victory'?'victory':m.mode!=='ending'?m.mode:null):null;
     for(const [kind,audio] of Object.entries(m.tracks)){audio.volume=m.volume;if(kind!==wanted)audio.pause();}
     if(m.tracks.explore.currentTime>=412)m.tracks.explore.currentTime=0;
     if(m.active===wanted)return;
+    if(m.active==='victory')m.stopVictory();
     m.active=wanted;
+    if(wanted==='victory'){m.startVictory();return;}
     if(wanted){const audio=m.tracks[wanted];
       Promise.resolve(audio.play()).then(()=>{if(m.active!==wanted)audio.pause();}).catch(error=>{
         if(error.name==='AbortError'||m.active!==wanted)return;
@@ -56,18 +79,18 @@ function musicEngine() {
       const plop=ac.createOscillator(),pg=ac.createGain();plop.type='sine';plop.frequency.setValueAtTime(210,ac.currentTime);plop.frequency.exponentialRampToValueAtTime(65,ac.currentTime+.19);pg.gain.setValueAtTime(Math.max(.01,m.volume*.38),ac.currentTime);pg.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.2);plop.connect(pg);pg.connect(ac.destination);plop.start();plop.stop(ac.currentTime+.21);
     }catch(_){}
   };
-  m.touch=(data,introActive=false,introTime=0,finaleDark=false,finaleCelebration=false,finaleRescue=false)=>{
+  m.touch=(data,introActive=false,introTime=0,finaleDark=false,finaleCelebration=false,finaleRescue=false,escapeEndingMusic=false)=>{
     m.lastTouch=Date.now();const run=String(data.run_id??'');
     if(m.runId!==run){m.runId=run;m.error='';if(m.tracks)for(const audio of Object.values(m.tracks))audio.currentTime=0;}
-    const finaleSceneMusic=finaleCelebration||finaleRescue;
-    if(finaleSceneMusic&&!m.sceneMusicStarted){
+    const sceneMusic=escapeEndingMusic||finaleCelebration||finaleRescue;
+    if(sceneMusic&&!m.sceneMusicStarted){
       m.ensureTracks();m.enabled=true;m.error='';
       if(m.tracks)m.tracks.explore.currentTime=0;
       if(!m.timer)m.timer=setInterval(()=>{if(Date.now()-m.lastTouch>2000){m.enabled=false;m.stop();}else m.sync();},250);
     }
-    m.sceneMusicStarted=finaleSceneMusic;
+    m.sceneMusicStarted=sceneMusic;
     const tense=data.capture_phase==='active'||gameNow(data)<data.alert_until_ms||(data.story?.voyage?.armed&&(data.sleeper_alive||Object.keys(data.guard_routes||{}).some(k=>data[k+'_alive'])));
-    const mode=finaleRescue?'explore':finaleDark?'alert':finaleCelebration?'explore':data.ending?'ending':introActive?(introTime>=11.8?'alert':'explore'):tense?'alert':'explore';
+    const mode=finaleRescue?'victory':finaleDark?'alert':finaleCelebration||escapeEndingMusic?'explore':data.ending?'ending':introActive?(introTime>=15.3?'alert':'explore'):tense?'alert':'explore';
     if(mode!==m.mode){if(mode==='alert'&&m.tracks)m.tracks.alert.currentTime=0;if(mode==='explore'&&m.tracks&&(finaleRescue||data.finale?.status==='lost'))m.tracks.explore.currentTime=0;m.mode=mode;}
     m.sync();
   };
@@ -1793,7 +1816,7 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
   introSkip.addEventListener('click',skipIntro);
   const music=musicEngine(),musicButton=parentElement.querySelector('.pt-music-button'),volume=parentElement.querySelector('.pt-music-volume');
   async function toggleMusic(){await music.toggle();stage.focus({preventScroll:true});}
-  function changeVolume(){music.volume=Number(volume.value);try{localStorage.setItem('team-pt-music-volume',String(music.volume));}catch(_){}const p=introProgress(client);music.touch(client.data,p!==null,p??0,finaleDarkNow(client.data,client.fin),finaleCelebrationNow(client.data,client.fin),finaleRescueNow(client.data));}
+  function changeVolume(){music.volume=Number(volume.value);try{localStorage.setItem('team-pt-music-volume',String(music.volume));}catch(_){}const p=introProgress(client);music.touch(client.data,p!==null,p??0,finaleDarkNow(client.data,client.fin),finaleCelebrationNow(client.data,client.fin),finaleRescueNow(client.data),escapeEndingMusicNow(client.data,client));}
   musicButton.addEventListener('click',toggleMusic);volume.addEventListener('input',changeVolume);volume.value=music.volume;
   introMusicButton.addEventListener('click',toggleMusic);
   renderStoryPanels(parentElement,client);
@@ -1991,8 +2014,8 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
     lastFrameAt = now;
     if(client.actionInFlight&&client.inFlightPayload&&now-client.lastDeliveryAt>1500)deliver(client.inFlightPayload);
     const introTime=introProgress(client,now);
-    music.touch(client.data,introTime!==null,introTime??0,finaleDarkNow(client.data,client.fin),finaleCelebrationNow(client.data,client.fin),finaleRescueNow(client.data));
-    if(introTime!==null&&introTime>=6.4&&!client.introSplashPlayed){client.introSplashPlayed=true;music.playSplash();}
+    music.touch(client.data,introTime!==null,introTime??0,finaleDarkNow(client.data,client.fin),finaleCelebrationNow(client.data,client.fin),finaleRescueNow(client.data),escapeEndingMusicNow(client.data,client));
+    if(introTime!==null&&introTime>=9.9&&!client.introSplashPlayed){client.introSplashPlayed=true;music.playSplash();}
     if(music.error&&music.error!==client.musicError){client.flashText=music.error;client.flashUntil=now+6000;}client.musicError=music.error;
     musicButton.textContent=music.enabled?'Music: on ♫':'Music: off ♫';musicButton.setAttribute?.('aria-pressed',String(music.enabled));
     introMusicButton.textContent=music.enabled?'Sound: on ♫':'Sound: off ♫';introMusicButton.setAttribute('aria-pressed',String(music.enabled));
@@ -2483,6 +2506,7 @@ function endingPreludeActive(client) {
   if(client.data.finale?.status==='won')return !reduced&&client.finaleWonAt!=null&&(performance.now()-client.finaleWonAt)/1000<RESCUE_SECONDS;
   return client.data.ending==='crate'?t<CRATE_NIGHT_SECONDS+16:!reduced&&t<(client.data.ending==='dinghy'?21:client.data.ending==='command'?24:client.data.ending==='castaway'?CASTAWAY_SECONDS:12);
 }
+function escapeEndingMusicNow(data,client){return Boolean(data.ending&&!data.finale&&endingPreludeActive(client));}
 function cinematicLabel(client) {
   const t=(performance.now()-client.endingStartedAt)/1000;
   if(client.data.ending==='castaway'){const m=castawayMotion(1000,560,t);return m.phase==='cell'?(m.found?'THE GUARDS FIND YOU':'THE COLD FLOOR OF THE CELL'):m.phase==='overboard'?'OVER THE SIDE':m.phase==='adrift'?`ADRIFT · DAY ${m.day} OF 4`:'AT THE WATER’S EDGE';}
@@ -3057,12 +3081,13 @@ function drawEnding(ctx,w,h,client) {
 // ---- Cannon finale ------------------------------------------------------------------------
 // After an ending the guards come back with cannons. The page plays the volley the server chose
 // and reports the player's moves; the server judges them. Keep these numbers equal to finale.py.
-const FINALE={balls:10,lives:3,endMs:20500,windowBefore:500,windowAfter:250};
+const FINALE={balls:10,lives:3,endMs:22500,windowBefore:500,windowAfter:250};
 const FINALE_TRAVEL_MS=1500;
 const FINALE_MAX_MOVES=120;
 const RESCUE_SECONDS=9;
-const BEACH_CELEBRATION_MS=8500;
-const BEACH_MUSIC_SWITCH_MS=BEACH_CELEBRATION_MS-1800;
+const BEACH_CELEBRATION_MS=10500;
+const BEACH_TWIST_MS=4800;
+const BEACH_MUSIC_SWITCH_MS=BEACH_CELEBRATION_MS-BEACH_TWIST_MS;
 const CAPTURE_SCENE_MS=6500;
 function finaleCaughtReady(data,fin){return Boolean(data.finale?.status==='lost'&&fin&&fin.captureT>=CAPTURE_SCENE_MS);}
 function finaleBallResult(ball,moves){
@@ -3160,9 +3185,8 @@ function drawBeachTwist(ctx,w,h,t){
   introPerson(ctx,px,ground,1.45*unit,{celebrating:cheering,scared:!cheering});
   ctx.textAlign='center';
   if(t<BEACH_MUSIC_SWITCH_MS)label(ctx,'FREE AT LAST!',w*.52,h*.18,Math.max(23,38*unit));
-  else if(t<BEACH_CELEBRATION_MS-1800)label(ctx,'The horizon darkens…',w*.52,h*.18,Math.max(18,27*unit));
   else label(ctx,'PLOT TWIST: THE GUARDS ARE BACK!',w*.52,h*.18,Math.max(18,28*unit));
-  if(t>BEACH_MUSIC_SWITCH_MS+1100)label(ctx,t<BEACH_CELEBRATION_MS-1800?'You thought you were free…':'They found you again!',w*.52,h*.24,Math.max(12,17*unit));
+  if(t>BEACH_MUSIC_SWITCH_MS+1000)label(ctx,t<BEACH_MUSIC_SWITCH_MS+2000?'You thought you were free…':'They found you again!',w*.52,h*.24,Math.max(12,17*unit));
   ctx.textAlign='left';
 }
 function drawCapturedReturn(ctx,w,h,t){
