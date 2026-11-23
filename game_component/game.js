@@ -398,7 +398,7 @@ function ambushTarget(client) {
     .sort((a,b)=>Math.abs(a[1].x-xy.x)-Math.abs(b[1].x-xy.x))[0]||null;
 }
 // Barrel ambush cutscene: pop up, grab the crew member, haul them over the rim
-// and stuff them head first into the barrel, then settle back to just the hat.
+// and stuff them head first into the barrel, then settle back to just the head.
 const AMBUSH_MS=1500;
 function easeInOut(t){return t<.5?2*t*t:1-2*(1-t)*(1-t);}
 function quadPoint(a,b,c,t){const u=1-t;return {x:u*u*a.x+2*u*t*b.x+t*t*c.x,y:u*u*a.y+2*u*t*b.y+t*t*c.y};}
@@ -421,26 +421,32 @@ function ambushMotion(a,ms) {
 }
 function barrelLurker(ctx,x,rim,lift,hands,coat,hatColor,band) {
   const head=rim+8-34*lift,brim=head-9;
+  const prisoner=coat===PRISONER_CLOTH;
   ctx.save();ctx.beginPath();ctx.rect(x-200,rim-300,400,300);ctx.clip();
   if(hands&&lift>.05) for(const s of [-1,1]) {
     const sx=x+s*10,sy=head+17,hx=hands.x+s*5,hy=hands.y+s*3;
     const ex=(sx+hx)/2+s*4,ey=Math.min(sy,hy)-8;
     line(ctx,sx,sy,ex,ey,coat,6);line(ctx,ex,ey,hx,hy,coat,6);
+    if(prisoner){prisonerLimb(ctx,sx,sy,ex,ey);prisonerLimb(ctx,ex,ey,hx,hy);}
     ctx.fillStyle='#d0a173';ctx.beginPath();ctx.arc(hx,hy,4,0,Math.PI*2);ctx.fill();
   }
   if(lift>.02){
     roundBox(ctx,x-12,head+9,24,32,5,coat,'#2c2927');
+    if(prisoner)prisonerShirt(ctx,x-12,head+9,24,32);
     ctx.fillStyle='#d0a173';ctx.beginPath();ctx.arc(x,head,10,0,Math.PI*2);ctx.fill();
     ctx.fillStyle='#272622';ctx.beginPath();ctx.arc(x+(hands&&hands.x<x?-4:4),head-1,1.5,0,Math.PI*2);ctx.fill();
   }
+  if(!prisoner){
   ctx.fillStyle=hatColor;ctx.beginPath();ctx.moveTo(x-17,brim);ctx.lineTo(x-9,brim-12);
   ctx.lineTo(x+8,brim-12);ctx.lineTo(x+17,brim);ctx.fill();
   line(ctx,x-20,brim,x+20,brim,band,4);
+  }
+  if(prisoner)prisonerHair(ctx,x,brim);
   ctx.restore();
 }
 function drawAmbush(ctx,client,anim,now) {
   const d=client.data,m=ambushMotion(anim,now-anim.start),vv=d.story?.voyage||{};
-  const coat=vv.captain_worn?d.rules.guard_styles.officer.color:d.disguised?'#9c3d33':'#2d6b73';
+  const coat=vv.captain_worn?d.rules.guard_styles.officer.color:d.disguised?'#9c3d33':PRISONER_CLOTH;
   const lurk=()=>barrelLurker(ctx,anim.bx,m.rim,m.lift,m.hands,coat,d.disguised?'#302b29':'#273a40','#c6b180');
   if(m.kick)lurk();
   if(m.guard){
@@ -543,6 +549,39 @@ function line(ctx, x1, y1, x2, y2, color, width = 1) {
   ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
   ctx.strokeStyle = color; ctx.lineWidth = width; ctx.stroke();
 }
+const PRISONER_CLOTH = '#f0eee5';
+const PRISONER_STRIPE = '#202426';
+
+function prisonerShirt(ctx,x,y,w,h,r=5) {
+  ctx.save();ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.clip();
+  ctx.fillStyle=PRISONER_CLOTH;ctx.fillRect(x,y,w,h);
+  ctx.fillStyle=PRISONER_STRIPE;
+  for(let sy=y+4;sy<y+h;sy+=8)ctx.fillRect(x,sy,w,4);
+  ctx.restore();
+  ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.strokeStyle='#283033';ctx.lineWidth=1.5;ctx.stroke();
+}
+
+function prisonerLimb(ctx,x1,y1,x2,y2,width=6) {
+  ctx.save();ctx.lineCap='round';
+  line(ctx,x1,y1,x2,y2,'#283033',width+1.5);
+  line(ctx,x1,y1,x2,y2,PRISONER_CLOTH,width);
+  ctx.lineCap='butt';
+  const length=Math.hypot(x2-x1,y2-y1);
+  for(let d=3;d<length-2;d+=7) {
+    const a=d/length,b=Math.min(d+3,length-2)/length;
+    line(ctx,x1+(x2-x1)*a,y1+(y2-y1)*a,x1+(x2-x1)*b,y1+(y2-y1)*b,PRISONER_STRIPE,width);
+  }
+  ctx.restore();
+}
+
+function prisonerHair(ctx,x,y) {
+  // Short hair follows the head in every pose; prison clothes have no headwear.
+  ctx.save();ctx.fillStyle='#3d3029';ctx.beginPath();
+  ctx.moveTo(x-9,y+5);ctx.quadraticCurveTo(x-12,y-3,x-5,y-5);
+  ctx.quadraticCurveTo(x+4,y-8,x+9,y-1);ctx.lineTo(x+9,y+4);
+  ctx.lineTo(x+5,y);ctx.lineTo(x-3,y+1);ctx.lineTo(x-7,y+6);ctx.closePath();ctx.fill();
+  line(ctx,x-5,y-3,x+3,y-4,'#75523a',1);ctx.restore();
+}
 function roundBox(ctx, x, y, w, h, radius, fill, stroke) {
   ctx.beginPath(); ctx.roundRect(x, y, w, h, radius);
   ctx.fillStyle = fill; ctx.fill();
@@ -554,20 +593,36 @@ function label(ctx, text, x, y, size = 15) {
   ctx.shadowColor = "#281b13"; ctx.shadowBlur = 5;
   ctx.fillText(text, x, y); ctx.shadowBlur = 0;
 }
+function roomSign(ctx,text,x,y) {
+  ctx.save();ctx.font='600 10px Georgia,serif';
+  const width=ctx.measureText(text).width+16;
+  roundBox(ctx,x-6,y-13,width,20,2,'#332c25','#88714e');
+  line(ctx,x-4,y-11,x+width-9,y-11,'#c1a16d',.7);
+  ctx.fillStyle='#e0ca9f';ctx.fillText(text,x+2,y+1);
+  ctx.fillStyle='#a18a62';ctx.beginPath();ctx.arc(x-2,y-3,1,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+}
 function barrel(ctx, x, y, size = 1) {
   ctx.save(); ctx.translate(x, y); ctx.scale(size, size);
+  ctx.fillStyle='rgba(16,22,22,.22)';ctx.beginPath();ctx.ellipse(2,1,25,4,0,0,Math.PI*2);ctx.fill();
   roundBox(ctx, -20, -47, 40, 47, 7, "#a07342", "#3c2a1e");
+  for(const bx of [-10,0,10]) line(ctx,bx,-44,bx,-3,'rgba(60,36,22,.35)',1);
   line(ctx, -19, -34, 19, -34, "#392820", 5);
   line(ctx, -19, -11, 19, -11, "#392820", 5);
   line(ctx, -14, -44, -14, -3, "#d2aa67", 1);
   line(ctx, 12, -44, 12, -3, "#75502c", 2);
+  for(const by of [-34,-11]) {line(ctx,-17,by-2,17,by-2,'#a99b78',1);for(const bx of [-13,13]){ctx.fillStyle='#c4ad7d';ctx.fillRect(bx,by-1,1.5,1.5);}}
   ctx.restore();
 }
 function crate(ctx, x, y, w = 56, h = 47) {
+  ctx.fillStyle='rgba(16,22,22,.2)';ctx.fillRect(x-3,y-2,w+7,5);
   ctx.fillStyle = "#9b7044"; ctx.fillRect(x, y - h, w, h);
+  for(let by=y-h+10;by<y-3;by+=11){line(ctx,x+3,by,x+w-3,by,'#795233',1);line(ctx,x+6,by+2,x+w-7,by+2,'rgba(231,193,126,.2)',1);}
   ctx.strokeStyle = "#3e2a20"; ctx.lineWidth = 4; ctx.strokeRect(x, y - h, w, h);
   line(ctx, x + 3, y - h + 3, x + w - 3, y - 3, "#64442c", 4);
   line(ctx, x + w - 3, y - h + 3, x + 3, y - 3, "#c59859", 3);
+  line(ctx,x+2,y-h+2,x+w-2,y-h+2,'#d3ac73',1);
+  ctx.fillStyle='#473b2e';for(const bx of [x+5,x+w-5])for(const by of [y-h+5,y-5])ctx.fillRect(bx,by,1.5,1.5);
 }
 function lamp(ctx, x, y) {
   line(ctx, x, y, x, y + 18, "#4e3426", 2);
@@ -632,10 +687,30 @@ function ship(ctx, data) {
     const [left,right,y]=data.rules.floors[zone];
     rooms.push([left,y===500?390:y===365?253:142,right-left, y===245?103: y===365?112:110,color]);
   }
-  for (const [x,y,w,h,color] of rooms) { ctx.fillStyle=color; ctx.fillRect(x,y,w,h); }
+  for (const [x,y,w,h,color] of rooms) {
+    ctx.fillStyle=color;ctx.fillRect(x,y,w,h);
+    // Fixed seams and staggered joints add depth without frame-to-frame noise.
+    ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
+    for(let row=0;row<7;row++) {
+      const py=y+row*17;
+      line(ctx,x,py,x+w,py,'rgba(25,22,20,.18)',1);
+      line(ctx,x,py+1,x+w,py+1,'rgba(255,224,167,.10)',1);
+      for(let px=x+34+(row%2)*63;px<x+w;px+=126) {
+        line(ctx,px,py,px,py+16,'rgba(24,21,19,.18)',1);
+        line(ctx,px+9,py+7,Math.min(x+w,px+63),py+7,'rgba(240,205,150,.07)',1);
+      }
+    }
+    const light=ctx.createLinearGradient(x,y,x,y+h);
+    light.addColorStop(0,'rgba(19,25,24,.25)');light.addColorStop(.22,'rgba(255,217,151,.09)');
+    light.addColorStop(.75,'rgba(255,217,151,.02)');light.addColorStop(1,'rgba(13,21,23,.21)');
+    ctx.fillStyle=light;ctx.fillRect(x,y,w,h);ctx.restore();
+  }
   for (const y of [245,365,500]) {
     line(ctx, 145, y + 2, 2580, y + 2, "#2c221e", 13);
-    line(ctx, 145, y - 2, 2580, y - 2, "#d1a06a", 5);
+    line(ctx, 145, y - 2, 2580, y - 2, "#bd9665", 4);
+    line(ctx,145,y+6,2580,y+6,'rgba(6,17,20,.35)',2);
+    ctx.fillStyle='#806546';
+    for(let x=165;x<2560;x+=94){ctx.beginPath();ctx.arc(x,y,1.1,0,Math.PI*2);ctx.fill();}
   }
   for (const [x,top,bottom] of [[150,140,500],[520,253,365],[900,253,500],[1040,140,245],[2580,140,500]]) {
     line(ctx,x,top,x,bottom-65,"#452f25",10);
@@ -658,8 +733,20 @@ function ship(ctx, data) {
   ctx.beginPath();ctx.moveTo(748,61);ctx.lineTo(548,210);ctx.lineTo(746,210);ctx.fill();
   drawGalleyWall(ctx);
   // A complete bed and searchable cargo. Round barrels are hiding places.
+  // Muted daylight and a small brass porthole sit behind the cell furniture.
+  ctx.save();ctx.beginPath();ctx.rect(153,391,232,106);ctx.clip();
+  const daylight=ctx.createLinearGradient(330,411,240,498);
+  daylight.addColorStop(0,'rgba(205,225,208,.18)');daylight.addColorStop(1,'rgba(205,225,208,0)');
+  ctx.fillStyle=daylight;ctx.beginPath();ctx.moveTo(319,416);ctx.lineTo(337,416);ctx.lineTo(325,498);ctx.lineTo(198,498);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#41616a';ctx.beginPath();ctx.arc(327,417,10,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#a38757';ctx.lineWidth=3;ctx.stroke();
+  ctx.strokeStyle='#d3b47b';ctx.lineWidth=.8;ctx.beginPath();ctx.arc(326,416,10,Math.PI,Math.PI*1.8);ctx.stroke();
+  line(ctx,327,408,327,426,'#354445',2);line(ctx,318,417,336,417,'#354445',2);
+  ctx.restore();
+  ctx.fillStyle='rgba(16,22,22,.23)';ctx.beginPath();ctx.ellipse(238,495,65,5,0,0,Math.PI*2);ctx.fill();
   roundBox(ctx,176,456,118,12,2,"#a57b51","#3a2a21");
   roundBox(ctx,183,432,104,25,4,"#6d8180","#38423c");
+  line(ctx,211,435,281,435,'#a5b4a1',1);line(ctx,263,438,263,454,'#586f6e',1);
   roundBox(ctx,188,434,24,14,5,"#ded2b5","#756f60");
   line(ctx,180,467,180,492,"#583b2c",7);line(ctx,288,467,288,492,"#583b2c",7);
   for (const [name,zone,x] of data.rules.crates) {
@@ -696,11 +783,11 @@ function ship(ctx, data) {
       ctx.lineTo(472,319);ctx.lineTo(480,311);ctx.lineTo(468,297);ctx.fill();
       line(ctx,446,326,472,326,"#d3aa69",3);
     } else {
-      // The sailor's old clothes remain hanging where the uniform belonged.
-      ctx.fillStyle="#32727b";ctx.beginPath();ctx.moveTo(450,297);ctx.lineTo(439,312);
+      // The prisoner's striped clothes remain where the uniform belonged.
+      ctx.fillStyle=PRISONER_CLOTH;ctx.beginPath();ctx.moveTo(450,297);ctx.lineTo(439,312);
       ctx.lineTo(447,320);ctx.lineTo(447,344);ctx.lineTo(471,344);
       ctx.lineTo(471,320);ctx.lineTo(479,312);ctx.lineTo(468,297);ctx.fill();
-      line(ctx,447,326,471,326,"#b5c9be",3);
+      prisonerShirt(ctx,447,300,24,43,2);
     }
     label(ctx,"OPEN",435,270,10);
   }
@@ -726,12 +813,12 @@ function ship(ctx, data) {
   if (!data.chest_open) label(ctx,"BLUE LOCK",1091,430,10);
   else label(ctx,data.has_pistol?"EMPTY":"OPEN",1097,430,10);
   for(const values of Object.values(data.rules.stairs)) stair(ctx,...values);
-  label(ctx,"CELL",165,403,14);label(ctx,"HOLD",650,408,14);
-  label(ctx,"CHEST ROOM",1180,408,14);label(ctx,"CABIN",166,271,14);
-  label(ctx,"MIDDLE DECK",650,273,14);label(ctx,"MESS HALL",1140,274,14);
-  label(ctx,"UPPER DECK",680,164,14);label(ctx,"GALLEY",1252,167,15);
+  roomSign(ctx,"CELL",165,403);roomSign(ctx,"HOLD",650,408);
+  roomSign(ctx,"CHEST ROOM",1180,408);roomSign(ctx,"CABIN",166,271);
+  roomSign(ctx,"MIDDLE DECK",650,273);roomSign(ctx,"MESS HALL",1140,274);
+  roomSign(ctx,"UPPER DECK",680,164);roomSign(ctx,"GALLEY",1252,167);
   for(const [zone,[name]] of Object.entries(data.rules.rooms)) {
-    const [left,,y]=data.rules.floors[zone];label(ctx,name,left+24,y-91,14);
+    const [left,,y]=data.rules.floors[zone];roomSign(ctx,name,left+24,y-91);
   }
   ctx.restore();
 }
@@ -873,19 +960,24 @@ function speechBubble(ctx,x,y,text) {
   ctx.fillStyle='#382d25';ctx.textAlign='center';ctx.fillText(text,x,y-5);ctx.restore();
 }
 function crouchingPerson(ctx,x,y,guard,elapsed,held,facing,moving,disguised,variant="patrol",style=null) {
-  const pace=moving?Math.sin(elapsed*9)*2:0,coat=style?.color||(disguised?'#9c3d33':'#2d6b73');
+  const prisoner=!guard&&!disguised&&!style;
+  const pace=moving?Math.sin(elapsed*9)*2:0,coat=style?.color||(guard||disguised?'#9c3d33':PRISONER_CLOTH);
   ctx.save();ctx.translate(x,y);ctx.scale(facing==='left'?-1:1,1);
   ctx.fillStyle='rgba(15,18,20,.27)';ctx.beginPath();ctx.ellipse(0,2,18,4,0,0,Math.PI*2);ctx.fill();
   line(ctx,-8,-23,-14+pace,-12,'#302b28',7);line(ctx,-14+pace,-12,-8+pace,-2,'#302b28',7);
   line(ctx,2,-23,12-pace,-13,'#302b28',7);line(ctx,12-pace,-13,10-pace,-2,'#302b28',7);
+  if(prisoner){prisonerLimb(ctx,-8,-23,-14+pace,-12,7);prisonerLimb(ctx,-14+pace,-12,-8+pace,-2,7);prisonerLimb(ctx,2,-23,12-pace,-13,7);prisonerLimb(ctx,12-pace,-13,10-pace,-2,7);}
   line(ctx,-8+pace,-2,-15+pace,0,'#241f1e',5);line(ctx,10-pace,-2,18-pace,0,'#241f1e',5);
-  ctx.save();ctx.translate(-3,-32);ctx.rotate(.58);roundBox(ctx,-11,-16,22,31,5,coat,'#2c2927');ctx.restore();
-  line(ctx,5,-36,17,-23,coat,6);line(ctx,17,-23,23,-24,'#d0a173',5);
+  ctx.save();ctx.translate(-3,-32);ctx.rotate(.58);roundBox(ctx,-11,-16,22,31,5,coat,'#2c2927');if(prisoner)prisonerShirt(ctx,-11,-16,22,31);ctx.restore();
+  line(ctx,5,-36,17,-23,coat,6);if(prisoner)prisonerLimb(ctx,5,-36,17,-23);line(ctx,17,-23,23,-24,'#d0a173',5);
   ctx.fillStyle='#d0a173';ctx.beginPath();ctx.arc(13,-41,9,0,Math.PI*2);ctx.fill();
+  if(!prisoner){
   ctx.fillStyle=disguised?'#332c29':'#263940';ctx.beginPath();ctx.moveTo(-1,-49);ctx.lineTo(5,-56);ctx.lineTo(14,-53);ctx.lineTo(23,-55);ctx.lineTo(29,-47);ctx.closePath();ctx.fill();
   line(ctx,-2,-49,29,-47,disguised?'#dbb36e':'#b5c9be',3);
+  }
+  if(prisoner)prisonerHair(ctx,13,-49);
   ctx.fillStyle='#272622';ctx.beginPath();ctx.arc(18,-42,1.5,0,Math.PI*2);ctx.fill();
-  line(ctx,-10,-26,7,-18,'#3d2c22',4);if(style?.badge)label(ctx,style.badge,-3,-28,10);
+  if(!prisoner)line(ctx,-10,-26,7,-18,'#3d2c22',4);if(style?.badge)label(ctx,style.badge,-3,-28,10);
   if(held==='pistol'){roundBox(ctx,21,-27,23,6,1,'#242c2c','#d7c19b');line(ctx,25,-23,25,-16,'#3b2b24',4);}
   else if(held==='lamp')lamp(ctx,27,-18);
   else if(held?.includes('key')){const c=held==='blue_key'?'#6cb6ff':'#ffe296';ctx.strokeStyle=c;ctx.lineWidth=3;ctx.beginPath();ctx.arc(27,-22,4,0,Math.PI*2);ctx.stroke();line(ctx,29,-18,33,-10,c,3);}
@@ -894,6 +986,7 @@ function crouchingPerson(ctx,x,y,guard,elapsed,held,facing,moving,disguised,vari
 function person(ctx, x, feetY, guard, elapsed, held = "none", facing = "right", moving = true, disguised = false, variant="patrol", style=null, shadow=true) {
   const pace = moving ? Math.sin(elapsed * (guard ? 10 : 11)) * 3 : 0;
   const uniform = guard || disguised;
+  const prisoner = !uniform && !style;
   ctx.save(); ctx.translate(x, feetY);
   if (shadow) {
     ctx.fillStyle = "rgba(15,18,20,.27)";
@@ -901,20 +994,36 @@ function person(ctx, x, feetY, guard, elapsed, held = "none", facing = "right", 
   }
   line(ctx, -6, -17, -7 + pace, -2, "#2d2927", 6);
   line(ctx, 6, -17, 7 - pace, -2, "#2d2927", 6);
+  if(prisoner){prisonerLimb(ctx,-6,-17,-7+pace,-2);prisonerLimb(ctx,6,-17,7-pace,-2);}
   line(ctx, -7 + pace, -2, -11 + pace, 0, "#241f1e", 6);
   line(ctx, 7 - pace, -2, 11 - pace, 0, "#241f1e", 6);
-  const coat=style?.color||(guard||disguised?'#9c3d33':'#2d6b73');
+  const coat=style?.color||(uniform?'#9c3d33':PRISONER_CLOTH);
   roundBox(ctx, -12, -47, 24, 32, 5, coat, "#2c2927");
+  if(prisoner)prisonerShirt(ctx,-12,-47,24,32);
+  // Seams, linen collar and brass fastenings preserve each role's coat color.
+  line(ctx,-8,-43,-8,-20,'rgba(236,224,181,.38)',1);
+  line(ctx,8,-42,8,-19,'rgba(10,22,25,.35)',2);
+  ctx.fillStyle=uniform?'#e0c48e':'#d6dfce';
+  ctx.beginPath();ctx.moveTo(-5,-47);ctx.lineTo(0,-39);ctx.lineTo(5,-47);ctx.fill();
+  if(!prisoner)for(const by of [-36,-24]){ctx.fillStyle='#d8b271';ctx.fillRect(0,by,1.5,1.5);}
   line(ctx, -10, -39, -17 - pace * .5, -21, coat, 6);
   line(ctx, 10, -39, 17 + pace * .5, -22, coat, 6);
-  ctx.fillStyle = "#d0a173";
+  if(prisoner){prisonerLimb(ctx,-10,-39,-17-pace*.5,-21);prisonerLimb(ctx,10,-39,17+pace*.5,-22);}
+  const skin=ctx.createLinearGradient(-9,-65,9,-47);
+  skin.addColorStop(0,'#e2b88b');skin.addColorStop(1,'#bc865f');
+  ctx.fillStyle = skin;
   ctx.beginPath(); ctx.arc(0, -56, 10, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle='#9e714e';ctx.lineWidth=1;ctx.stroke();
+  line(ctx,facing==='left'?-7:7,-54,facing==='left'?-5:5,-51,'#aa7854',1);
+  if(!prisoner){
   ctx.fillStyle = uniform ? "#332c29" : "#263940";
   ctx.beginPath(); ctx.moveTo(-16, -65); ctx.lineTo(-10, -73); ctx.lineTo(0, -69);
   ctx.lineTo(11, -73); ctx.lineTo(17, -65); ctx.closePath(); ctx.fill();
   line(ctx, -18, -65, 18, -65, uniform ? "#dbb36e" : "#b5c9be", 3);
+  }
+  if(prisoner)prisonerHair(ctx,0,-66);
   ctx.fillStyle = "#272622"; ctx.beginPath(); ctx.arc(facing === "left" ? -4 : 4, -57, 1.5, 0, Math.PI * 2); ctx.fill();
-  line(ctx, -10, -30, 12, -30, "#3d2c22", 5);
+  if(!prisoner){line(ctx, -10, -30, 12, -30, '#3d2c22', 5);roundBox(ctx,-2,-32,5,4,1,'#c7a562','#6e5331');}
   if(style?.badge) label(ctx,style.badge,-6,-35,10);
   if (guard && held === "cell_key") {
     ctx.shadowColor = "#ffe296"; ctx.shadowBlur = 13;
@@ -956,10 +1065,21 @@ function lyingPerson(ctx, x, y, color, keyVisible = false) {
   ctx.beginPath();ctx.moveTo(-35,-5);ctx.quadraticCurveTo(-3,8,22,1);
   ctx.strokeStyle="#392b29";ctx.lineWidth=17;ctx.lineCap="round";ctx.stroke();
   ctx.strokeStyle=color;ctx.lineWidth=13;ctx.stroke();
+  if(color===PRISONER_CLOTH){
+    ctx.save();ctx.lineCap='butt';
+    for(let t=.08;t<.96;t+=.16){
+      const a=quadPoint({x:-35,y:-5},{x:-3,y:8},{x:22,y:1},t);
+      const b=quadPoint({x:-35,y:-5},{x:-3,y:8},{x:22,y:1},t+.07);
+      line(ctx,a.x,a.y,b.x,b.y,PRISONER_STRIPE,13);
+    }
+    ctx.restore();
+  }
   ctx.fillStyle="#d0a173";ctx.beginPath();ctx.arc(-43,-7,9,0,Math.PI*2);ctx.fill();
-  line(ctx,-49,-17,-34,-15,"#272c31",5);
+  if(color!==PRISONER_CLOTH)line(ctx,-49,-17,-34,-15,"#272c31",5);
+  if(color===PRISONER_CLOTH){ctx.save();ctx.translate(-43,-17);ctx.scale(.7,.7);prisonerHair(ctx,0,0);ctx.restore();}
   ctx.beginPath();ctx.moveTo(22,1);ctx.quadraticCurveTo(35,-8,47,-6);
   ctx.strokeStyle="#302b28";ctx.lineWidth=7;ctx.stroke();
+  if(color===PRISONER_CLOTH)prisonerLimb(ctx,22,1,47,-6,7);
   if (keyVisible) {
     ctx.strokeStyle="#6cb6ff";ctx.lineWidth=3;ctx.beginPath();ctx.arc(17,0,5,0,Math.PI*2);ctx.stroke();
     line(ctx,21,3,25,10,"#6cb6ff",2);
@@ -978,11 +1098,17 @@ function cellBars(ctx, open) {
   ctx.save();
   ctx.fillStyle = "rgba(12,19,20,.14)"; ctx.fillRect(150, 389, 240, 112);
   for (let x = 151; x < 387; x += 25) {
+    line(ctx,x+3,390,x+3,501,'rgba(6,17,20,.22)',8);
     line(ctx, x, 387, x, 501, "#1e2b2b", 7);
     line(ctx, x - 1, 387, x - 1, 501, "#8d9c8e", 2);
+    line(ctx,x+1,390,x+1,499,'#384d49',1);
   }
   line(ctx, 150, 407, 389, 407, "#25302d", 7);
   line(ctx, 150, 470, 389, 470, "#25302d", 7);
+  for(const y of [407,470]) {
+    line(ctx,151,y-2,387,y-2,'#51635a',1);
+    ctx.fillStyle='#8d967d';for(let x=151;x<387;x+=25){ctx.beginPath();ctx.arc(x,y,1.4,0,Math.PI*2);ctx.fill();}
+  }
   line(ctx, 389, 385, 389, 501, "#1b2929", 8);
   if (open) {
     ctx.fillStyle="rgba(11,27,28,.32)";ctx.fillRect(390,411,21,87);
@@ -998,6 +1124,7 @@ function cellBars(ctx, open) {
     line(ctx, 388, 435, 411, 435, "#25302d", 6);
     line(ctx, 388, 481, 411, 481, "#25302d", 6);
     ctx.fillStyle = "#efc56e"; ctx.beginPath(); ctx.arc(400, 456, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle='#a17e42';ctx.lineWidth=1;ctx.stroke();line(ctx,397,452,402,452,'#ffe3a3',1);
     ctx.fillStyle = "#4a3525"; ctx.fillRect(398, 455, 4, 8);
     ctx.fillStyle = "#e6c277"; ctx.font = "700 12px system-ui"; ctx.fillText("LOCKED", 404, 402);
   }
@@ -1165,7 +1292,7 @@ function drawPartner(ctx,client) {
   // Ease toward the latest position so 8 updates a second look smooth.
   const far=Math.hypot(p.x-p.shownX,p.y-p.shownY)>220,k=far?1:Math.min(1,dt*14);
   p.shownX+=(p.x-p.shownX)*k;p.shownY+=(p.y-p.shownY)*k;
-  const moving=performance.now()-p.movedAt<300,style=p.cap?client.data.rules.guard_styles.officer:{color:p.g?'#9c3d33':'#7a4f9a'};
+  const moving=performance.now()-p.movedAt<300,style=p.cap?client.data.rules.guard_styles.officer:p.g?{color:'#9c3d33'}:null;
   const args=[ctx,p.shownX,p.shownY,false,performance.now()/1000,'none',p.f<0?'left':'right',moving,p.g,'patrol',style];
   if(p.c)crouchingPerson(...args);else person(...args);
 }
@@ -1208,9 +1335,9 @@ function draw(client, canvas, stage, guards) {
   const fired=client.data.story?.voyage?.cannon_fired;
   if(fired!==undefined){const shake=cannonMotion(gameNow(client.data)-fired).shake;if(shake)ctx.translate((Math.random()-.5)*shake*2,(Math.random()-.5)*shake*2);}
   ship(ctx, client.data);
-  storyDecor(ctx,client.data);
+  storyDecor(ctx,client.data,client.position);
   for(const rat of client.rats||[])drawRat(ctx,rat,performance.now());
-  // The hat belongs to the scenery layer; a passing guard walks in front.
+  // The hidden head belongs to the scenery layer; passing guards walk in front.
   const anim=client.ambushAnim;
   if(anim&&(!client.data.hidden_barrel||client.capture||performance.now()-anim.start>=AMBUSH_MS))client.ambushAnim=null;
   if(client.ambushAnim)drawAmbush(ctx,client,client.ambushAnim,performance.now());
@@ -1264,13 +1391,13 @@ function draw(client, canvas, stage, guards) {
   if(!client.data.sleeper_alive&&!client.data.story?.voyage?.concealed?.sleeper)fallen(ctx,300,365);
   const vv=client.data.story?.voyage||{};
   const inGuideCover=vv.escort?.hidden;
-  if (client.data.in_hammock || client.position.zone === "hammock")lyingPerson(ctx,300,270,vv.captain_worn?client.data.rules.guard_styles.officer.color:client.data.disguised?"#9c3d33":"#2d6b73");
+  if (client.data.in_hammock || client.position.zone === "hammock")lyingPerson(ctx,300,270,vv.captain_worn?client.data.rules.guard_styles.officer.color:client.data.disguised?"#9c3d33":PRISONER_CLOTH);
   else if ((!client.data.hidden_barrel && !inGuideCover) || client.capture) {
     const args=[ctx,player.x,player.y,false,performance.now()/1000,client.data.held_item,client.facing,Boolean(client.capture || vv.escort&&!vv.escort.paused || performance.now()<client.motionUntil),client.data.disguised,"patrol",vv.captain_worn?client.data.rules.guard_styles.officer:null];
     if(vv.duck || vv.escort)crouchingPerson(...args);else person(...args);
   } else if(inGuideCover) {
-    // A small glimpse of the hat makes it clear where the guide has concealed you.
-    line(ctx,player.x-14,player.y-36,player.x+14,player.y-36,'#b5c9be',4);
+    // A glimpse of hair or the uniform cap marks the guided hiding place.
+    line(ctx,player.x-10,player.y-36,player.x+10,player.y-36,client.data.disguised?'#b5c9be':'#49382c',3);
   }
   drawPartner(ctx,client);
   for(const b of vv.shots||[]) {
@@ -1286,7 +1413,7 @@ function draw(client, canvas, stage, guards) {
   cellBars(ctx, Boolean(client.data.door_open || client.capture?.phase==="escort" || gameNow(client.data)>=client.data.alert_started_ms&&gameNow(client.data)<client.data.alert_until_ms&&guards.patrol.x<390&&guards.patrol.y===500));
   drawPartnerName(ctx,client);
   ctx.restore();
-  const dim=client.data.bright_view?.25:.61;
+  const dim=client.data.bright_view?.20:.54;
   const radius=(client.data.has_lamp&&client.data.lamp_lit&&client.data.held_item==="lamp"?295:205)*camera.zoom;
   const playerScreenY=(player.y-camera.y-25)*camera.zoom;
   const shade=ctx.createRadialGradient(w/2,playerScreenY,50,w/2,playerScreenY,radius);
@@ -1310,27 +1437,48 @@ function snapshot(position) {
 function introCaption(t) {
   if(t<7)return 'A peaceful morning. You sit and fish with your dog.';
   if(t<11)return 'A flash below the water—the dog spots a fish and leaps into the waves!';
-  if(t<15.3)return 'You dive in and swim after him, reaching through the waves.';
+  if(t<12)return 'Your dog splashes into the water. For a moment, you hesitate…';
+  if(t<15.3)return 'You spring from the boat and dive after him, reaching through the waves.';
   if(t<19.4)return 'Small pirate boats surround you and your dog. The pirates close in.';
   if(t<22.5)return '';
   if(t<29)return 'You wake in the cell, frightened and alone.';
   return 'The adventure begins.';
 }
-function introPerson(ctx,x,y,scale=1,{reach=0,bound=false,sack=false,scared=false,seated=false,celebrating=false,color='#2d6b73'}={}) {
-  // Keep the cutscene figures close to the scale and proportions of sprites in the game.
+function checkedShirt(ctx,x,y,w,h,radius=4) {
+  ctx.save();ctx.beginPath();ctx.roundRect(x,y,w,h,radius);ctx.clip();
+  ctx.fillStyle='#557783';ctx.fillRect(x,y,w,h);
+  for(let row=0;row<Math.ceil(h/6);row++)for(let col=0;col<Math.ceil(w/6);col++){
+    if((row+col)%2===0){ctx.fillStyle='rgba(34,56,66,.46)';ctx.fillRect(x+col*6,y+row*6,3,3);}
+  }
+  ctx.strokeStyle='rgba(218,218,193,.58)';ctx.lineWidth=1;
+  for(let px=x+3;px<x+w;px+=6){ctx.beginPath();ctx.moveTo(px,y);ctx.lineTo(px,y+h);ctx.stroke();}
+  for(let py=y+3;py<y+h;py+=6){ctx.beginPath();ctx.moveTo(x,py);ctx.lineTo(x+w,py);ctx.stroke();}
+  ctx.restore();
+}
+function introPerson(ctx,x,y,scale=1,{reach=0,bound=false,sack=false,scared=false,seated=false,celebrating=false,checked=false,color='#2d6b73'}={}) {
+  // Reuse the game sprite for standing characters so caps, faces and uniforms match exactly.
+  if(!seated&&!bound&&!sack&&!scared&&!celebrating){
+    const uniform=color==='#9c3d33';ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);
+    person(ctx,0,0,uniform,0,'none','right',false,false,'patrol',{color},false);
+    if(checked){checkedShirt(ctx,-12,-47,24,32,5);line(ctx,-6,-17,-7,-2,'#40596c',6);line(ctx,6,-17,7,-2,'#40596c',6);line(ctx,-6,-14,-7,-4,'#8a99a0',1);line(ctx,6,-14,7,-4,'#8a99a0',1);}
+    if(reach){line(ctx,10,-39,24,-43,color,6);line(ctx,24,-43,36,-48,'#d0a173',5);}
+    ctx.restore();return;
+  }
   ctx.save();ctx.translate(x,y);ctx.scale(scale*.55,scale*.55);ctx.lineCap='round';
-  ctx.strokeStyle='#302b29';ctx.lineWidth=11;if(seated){line(ctx,-10,-39,-19,-17,'#514238',11);line(ctx,-19,-17,8,-17,'#514238',11);line(ctx,10,-39,23,-18,'#514238',11);line(ctx,23,-18,42,-18,'#514238',11);}else{line(ctx,-10,-39,-17,-5,'#514238',11);line(ctx,10,-39,18,-5,'#514238',11);}
-  roundBox(ctx,-24,-84,48,49,13,color,'#2c2927');
+  ctx.strokeStyle='#302b29';ctx.lineWidth=11;if(seated){line(ctx,-10,-39,-19,-17,checked?'#40596c':'#514238',11);line(ctx,-19,-17,8,-17,'#302b28',11);line(ctx,10,-39,23,-18,checked?'#40596c':'#514238',11);line(ctx,23,-18,42,-18,'#302b28',11);}else{line(ctx,-10,-39,-17,-5,checked?'#40596c':'#514238',11);line(ctx,10,-39,18,-5,checked?'#40596c':'#514238',11);}
+  roundBox(ctx,-22,-84,44,49,11,color,'#2c2927');if(checked)checkedShirt(ctx,-22,-84,44,49,11);
   if(celebrating){
     line(ctx,-23,-72,-48,-111,'#d19a71',10);line(ctx,23,-72,48,-111,'#d19a71',10);
-    ctx.fillStyle='#cb9270';ctx.beginPath();ctx.arc(-49,-113,6,0,Math.PI*2);ctx.arc(49,-113,6,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#d0a173';ctx.beginPath();ctx.arc(-49,-113,6,0,Math.PI*2);ctx.arc(49,-113,6,0,Math.PI*2);ctx.fill();
   }else{
     line(ctx,-23,-72,reach<0?-60:-38,-51,'#d19a71',10);
     line(ctx,23,-72,reach>0?60:bound?31:43,-50,'#d19a71',10);
   }
-  ctx.fillStyle='#cb9270';ctx.beginPath();ctx.arc(0,-103,22,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle='#263940';ctx.beginPath();ctx.arc(0,-111,23,Math.PI,Math.PI*2);ctx.lineTo(21,-103);ctx.lineTo(-20,-103);ctx.closePath();ctx.fill();line(ctx,-20,-101,20,-101,'#b5c9be',5);
-  ctx.fillStyle='#272322';ctx.beginPath();ctx.arc(-7,-103,scared?3:2,0,Math.PI*2);ctx.arc(7,-103,scared?3:2,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#d0a173';ctx.beginPath();ctx.arc(0,-103,19,0,Math.PI*2);ctx.fill();
+  const uniform=color==='#9c3d33';
+  ctx.fillStyle=uniform?'#332c29':'#263940';ctx.beginPath();ctx.moveTo(-18,-103);ctx.lineTo(-16,-119);ctx.lineTo(-9,-127);ctx.lineTo(0,-123);ctx.lineTo(11,-127);ctx.lineTo(18,-119);ctx.lineTo(19,-103);ctx.closePath();ctx.fill();
+  line(ctx,-20,-101,20,-101,uniform?'#dbb36e':'#b5c9be',4);
+  ctx.fillStyle='#272322';ctx.beginPath();ctx.arc(6,-103,scared?3:2,0,Math.PI*2);ctx.fill();
   line(ctx,-1,-98,3,-94,'#86563f',2);if(scared){ctx.fillStyle='#4d2525';ctx.beginPath();ctx.ellipse(0,-87,5,7,0,0,Math.PI*2);ctx.fill();}else line(ctx,-6,-88,6,-88,'#7b413b',2);
   if(bound){line(ctx,-25,-53,25,-53,'#d7b77c',5);line(ctx,-12,-59,-18,-47,'#d7b77c',3);line(ctx,12,-59,18,-47,'#d7b77c',3);}
   if(sack){
@@ -1371,14 +1519,14 @@ function introSkiff(ctx,x,y,scale,player,dog,t) {
   // Fishing rod, line and bobber make the opening action readable at a glance.
   line(ctx,-42,-26,-74,-119,'#553a2c',6);line(ctx,-74,-119,22,-7,'#ddcc9a',2);
   ctx.fillStyle='#e65a46';ctx.beginPath();ctx.arc(22,-5,5,0,Math.PI*2);ctx.fill();
-  if(player)introPerson(ctx,-46,-26,1.12,{reach:player.reach,bound:player.bound,sack:player.sack,seated:player.seated});
+  if(player)introPerson(ctx,-46,-26,1.12,{reach:player.reach,bound:player.bound,sack:player.sack,seated:player.seated,checked:player.checked});
   if(dog)introDog(ctx,dog.x,dog.y,dog.scale,dog.rotation,{wet:dog.wet,fade:dog.fade,paddling:dog.paddling});
   ctx.restore();
 }
 function introPirate(ctx,x,y,scale=1) {
   introPerson(ctx,x,y,scale,{color:'#9c3d33'});
-  ctx.save();ctx.translate(x,y);ctx.scale(scale*.55,scale*.55);ctx.fillStyle='#302724';ctx.beginPath();ctx.moveTo(-29,-72);ctx.lineTo(0,-87);ctx.lineTo(30,-72);ctx.closePath();ctx.fill();line(ctx,-18,-70,20,-70,'#d4b878',4);
-  line(ctx,12,-42,34,-76,'#d9e0e4',4);line(ctx,12,-42,19,-34,'#9a7948',5);line(ctx,34,-76,39,-84,'#fff0cb',2);ctx.restore();
+  ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);
+  line(ctx,12,-26,30,-54,'#d9e0e4',3);line(ctx,12,-26,20,-21,'#9a7948',4);line(ctx,30,-54,34,-61,'#fff0cb',2);ctx.restore();
 }
 function drawIntroCell(ctx,w,h,t,clamp01) {
   const fade=clamp01((t-21.3)/1.2);if(!fade)return;
@@ -1388,11 +1536,25 @@ function drawIntroCell(ctx,w,h,t,clamp01) {
   const cx=w*.52,doorW=Math.min(w*.64,470),left=cx-doorW/2,top=h*.16,bottom=h*.81;
   ctx.fillStyle='#282b27';ctx.fillRect(left,top,doorW,bottom-top);
   ctx.fillStyle='#403d33';ctx.fillRect(left+8,bottom-29,doorW-16,27);
-  // A high barred porthole and brass-lit seams locate the brig beneath deck.
-  ctx.fillStyle='#112e38';ctx.beginPath();ctx.arc(cx,h*.31,Math.min(48,w*.08),Math.PI,Math.PI*2);ctx.lineTo(cx+Math.min(48,w*.08),h*.36);ctx.lineTo(cx-Math.min(48,w*.08),h*.36);ctx.closePath();ctx.fill();
-  for(let i=-2;i<=2;i++)line(ctx,cx+i*18,h*.26,cx+i*18,h*.39,'#aa9568',4);line(ctx,cx-50,h*.35,cx+50,h*.35,'#aa9568',4);
+  // Keep the cell wall solid: the playable cell has no window.
+
+  // Match the game's low bunk: green-gray mattress, wooden frame, legs and pillow.
+  const bedScale=doorW/240,bedX=left+16*bedScale,floorY=bottom-8,frameY=floorY-44*bedScale;
+  line(ctx,left+8,bottom-8,left+doorW-8,bottom-8,'#665744',5);
+  for(let i=0;i<5;i++)line(ctx,left+12+i*doorW*.2,bottom-5,left+12+i*doorW*.2,bottom-1,'#9a7950',2);
+  roundBox(ctx,bedX+7*bedScale,floorY-68*bedScale,104*bedScale,25*bedScale,4,'#6d8180','#38423c');
+  roundBox(ctx,bedX+12*bedScale,floorY-66*bedScale,24*bedScale,14*bedScale,5,'#ded2b5','#756f60');
+  roundBox(ctx,bedX,frameY,118*bedScale,12*bedScale,2,'#a57b51','#3a2a21');
+  line(ctx,bedX+4*bedScale,frameY+11*bedScale,bedX+4*bedScale,floorY,'#583b2c',5*bedScale);
+  line(ctx,bedX+112*bedScale,frameY+11*bedScale,bedX+112*bedScale,floorY,'#583b2c',5*bedScale);
+  // A folded clue peeks out from beneath the bunk, as it does in the playable cell.
+  ctx.save();ctx.translate(bedX+77*bedScale,floorY-3*bedScale);ctx.rotate(-.12);roundBox(ctx,-10*bedScale,-8*bedScale,20*bedScale,13*bedScale,1,'#ebd7a6','#705937');line(ctx,-6*bedScale,-4*bedScale,6*bedScale,-4*bedScale,'#8b7a55',.8*bedScale);ctx.restore();
   // The captive is left alone, still hooded and bound. No dog appears in the brig.
-  introPerson(ctx,cx,h*.78,Math.min(1.25,w/650),{scared:true,color:'#2d6b73'});
+  // The captive wears the same striped prison clothes as the playable character.
+  const prisonerX=left+doorW*.78,prisonerY=bottom-7,prisonerScale=Math.min(1.95,w/420);
+  ctx.save();ctx.translate(prisonerX,prisonerY);ctx.scale(prisonerScale,prisonerScale);
+  person(ctx,0,0,false,0,'none','right',false,false,'patrol',null,false);
+  ctx.fillStyle='#272322';ctx.beginPath();ctx.ellipse(0,-48,3.2,4.4,0,0,Math.PI*2);ctx.fill();ctx.restore();
   for(let i=0;i<7;i++)line(ctx,left+doorW*(i+.5)/7,top,left+doorW*(i+.5)/7,bottom,'#b29868',5);
   line(ctx,left,top,left,bottom,'#b29868',8);line(ctx,left+doorW,top,left+doorW,bottom,'#b29868',8);
   ctx.restore();
@@ -1400,21 +1562,31 @@ function drawIntroCell(ctx,w,h,t,clamp01) {
 function drawIntroScene(ctx,w,h,t) {
   const clamp01=x=>Math.max(0,Math.min(1,x));
   const mix=(a,b,f)=>Math.round(a+(b-a)*f);
-  const dawn=clamp01(t/7),cellFade=clamp01((t-21.3)/1.2),sea=h*.53;
+  const dawn=clamp01(t/7),pirateFog=clamp01((t-15.3)/.45),cellFade=clamp01((t-21.3)/1.2),sea=h*.53;
   const boatX=w*.44,boatY=sea-h*.035,unit=Math.min(w/900,h/500);
-  const jump=clamp01((t-8.7)/1.3),pirateReveal=clamp01((t-15.3)/1.8),zoom=t<8?1.55:t<10.5?1.55+.75*clamp01((t-8)/2.5):t<15.2?2.3-.32*clamp01((t-10.5)/4.7):t<17.7?1.98-1.03*clamp01((t-15.2)/2.5):t<19.4? .95:1;
+  const jump=clamp01((t-8.7)/1.3),pirateReveal=clamp01((t-15.3)/1.8),zoom=t<8?1.55:t<10.5?1.55+.75*clamp01((t-8)/2.5):t<15.2?2.3-.75*clamp01((t-10.5)/4.7):t<17.7?1.55-.6*clamp01((t-15.2)/2.5):t<19.4? .95:1;
   let focusX=boatX,focusY=boatY-h*.07;
   if(t>=8&&t<11.2){const f=clamp01((t-8)/.9);focusX=boatX+unit*(92+250*clamp01((t-8.7)/1.3))*f;focusY=sea+h*.02;}
-  else if(t>=11.2&&t<15.2){focusX=boatX+unit*330;focusY=sea+h*.02;}
-  else if(t>=15.2&&t<19.4){const reveal=clamp01((t-15.2)/2.5);focusX=boatX+unit*330+(w*.5-(boatX+unit*330))*reveal;focusY=sea+h*.02+(sea-h*.08-(sea+h*.02))*reveal;}
+  else if(t>=11.2&&t<15.2){focusX=boatX+unit*170;focusY=sea+h*.02;}
+  else if(t>=15.2&&t<19.4){const reveal=clamp01((t-15.2)/2.5),wideFocus=boatX+unit*170;focusX=wideFocus+(w*.5-wideFocus)*reveal;focusY=sea+h*.02+(sea-h*.08-(sea+h*.02))*reveal;}
   ctx.save();ctx.translate(w*.5,h*.5);ctx.scale(zoom,zoom);ctx.translate(-focusX,-focusY);
   const sky=ctx.createLinearGradient(0,0,0,h);
-  sky.addColorStop(0,`rgb(${mix(39,19,dawn)},${mix(79,42,dawn)},${mix(111,62,dawn)})`);
-  sky.addColorStop(.64,`rgb(${mix(218,150,dawn)},${mix(151,106,dawn)},${mix(114,86,dawn)})`);
+  const skyTop=[mix(mix(38,92,dawn),116,pirateFog),mix(mix(64,159,dawn),123,pirateFog),mix(mix(93,205,dawn),128,pirateFog)];
+  const skyHorizon=[mix(mix(173,255,dawn),166,pirateFog),mix(mix(116,211,dawn),168,pirateFog),mix(mix(94,148,dawn),163,pirateFog)];
+  sky.addColorStop(0,`rgb(${skyTop.join(',')})`);sky.addColorStop(.64,`rgb(${skyHorizon.join(',')})`);
   sky.addColorStop(1,'#173b4b');ctx.fillStyle=sky;ctx.fillRect(0,0,w,h);
-  ctx.fillStyle='#f4c67f';ctx.globalAlpha=.85;ctx.beginPath();ctx.arc(w*.78,h*.23,Math.min(28,w*.05),0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
-  const water=ctx.createLinearGradient(0,sea,0,h);water.addColorStop(0,'#287185');water.addColorStop(1,'#102f42');ctx.fillStyle=water;ctx.fillRect(0,sea,w,h-sea);
-  for(let i=0;i<12;i++){const yy=sea+12+i*i*2.1,xx=(i*97+performance.now()*.012)%(w+120)-60;line(ctx,xx,yy,xx+w*.13,yy,'rgba(230,222,188,.3)',2);}
+  const sunX=w*.78,sunY=h*(.545-.085*dawn),sunRadius=Math.min(25,w*.043);
+  ctx.globalAlpha=.88*(1-pirateFog);const sunGlow=ctx.createRadialGradient(sunX,sunY,sunRadius*.35,sunX,sunY,sunRadius*3.2);
+  sunGlow.addColorStop(0,'rgba(255,232,174,.48)');sunGlow.addColorStop(1,'rgba(255,205,120,0)');ctx.fillStyle=sunGlow;ctx.fillRect(sunX-sunRadius*3.2,sunY-sunRadius*3.2,sunRadius*6.4,sunRadius*6.4);
+  ctx.fillStyle='#ffe09a';ctx.beginPath();ctx.arc(sunX,sunY,sunRadius,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
+  const water=ctx.createLinearGradient(0,sea,0,h);
+  water.addColorStop(0,`rgb(${mix(40,125,pirateFog)},${mix(113,134,pirateFog)},${mix(133,139,pirateFog)})`);
+  water.addColorStop(1,`rgb(${mix(16,80,pirateFog)},${mix(47,91,pirateFog)},${mix(66,98,pirateFog)})`);ctx.fillStyle=water;ctx.fillRect(0,sea,w,h-sea);
+  for(let i=0;i<12;i++){const yy=sea+12+i*i*2.1,xx=(i*97+performance.now()*.012)%(w+120)-60;line(ctx,xx,yy,xx+w*.13,yy,`rgba(${mix(230,216,pirateFog)},${mix(222,219,pirateFog)},${mix(188,211,pirateFog)},.3)`,2);}
+  if(pirateFog>0){
+    const mist=ctx.createLinearGradient(0,sea-h*.2,0,sea+h*.12);mist.addColorStop(0,'rgba(204,208,205,0)');mist.addColorStop(.55,`rgba(207,210,205,${.42*pirateFog})`);mist.addColorStop(1,`rgba(184,192,191,${.18*pirateFog})`);
+    ctx.fillStyle=mist;ctx.fillRect(0,sea-h*.2,w,h*.32);
+  }
   if(pirateReveal>0){
     const positions=[[w*.14,.32],[w*.38,.29],[w*.62,.3],[w*.91,.33]];
     ctx.save();ctx.beginPath();ctx.rect(-w,-h,w*3,sea+h);ctx.clip();
@@ -1423,7 +1595,12 @@ function drawIntroScene(ctx,w,h,t) {
       ctx.save();ctx.globalAlpha=pirateReveal;ctx.translate(px,py);ctx.scale(boatScale,boatScale);
       ctx.fillStyle='#563c30';ctx.strokeStyle='#241e1c';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(-125,-6);ctx.quadraticCurveTo(0,22,125,-6);ctx.lineTo(99,25);ctx.quadraticCurveTo(0,43,-99,25);ctx.closePath();ctx.fill();ctx.stroke();
       ctx.fillStyle='#271f1d';ctx.beginPath();ctx.moveTo(-22,-5);ctx.lineTo(-20,-148);ctx.lineTo(0,-135);ctx.closePath();ctx.fill();ctx.beginPath();ctx.moveTo(23,-5);ctx.lineTo(20,-132);ctx.lineTo(48,-30);ctx.closePath();ctx.fill();
-      // One pirate stands on each deck, with a raised sword instead of mast-like stray lines.
+      // Each mast flies a small black Jolly Roger with a white skull and crossed bones.
+      line(ctx,-20,-146,-20,-166,'#392b24',2.5);
+      ctx.fillStyle='#17191a';ctx.beginPath();ctx.moveTo(-19,-165);ctx.quadraticCurveTo(-3,-161,1,-155);ctx.quadraticCurveTo(-8,-148,-19,-149);ctx.closePath();ctx.fill();
+      ctx.fillStyle='#e7dfc9';ctx.beginPath();ctx.arc(-11,-158,3.2,0,Math.PI*2);ctx.fill();
+      line(ctx,-15,-153,-8,-149,'#e7dfc9',1.5);line(ctx,-15,-149,-8,-153,'#e7dfc9',1.5);
+      // One pirate stands on each deck, dressed like the game's red-coated guards.
       introPirate(ctx,0,8,1.05);line(ctx,-19,-122,29,-94,'rgba(231,211,164,.7)',2);ctx.restore();
     });
     ctx.restore();
@@ -1431,21 +1608,23 @@ function drawIntroScene(ctx,w,h,t) {
   const dogFade=1-clamp01((t-19.4)/.8);
   if(t<19.4){
     if(t<14.3){
-      introSkiff(ctx,boatX,boatY,unit,t<11?{reach:t>=8?1:0,seated:t<8}:null,null,t);
+      introSkiff(ctx,boatX,boatY,unit,t<12?{reach:t>=11.65?1:0,seated:true,checked:true}:null,null,t);
       // Let the water cover the submerged half of the hull and the character's legs.
       const surface=ctx.createLinearGradient(0,sea,0,h);surface.addColorStop(0,'#287185');surface.addColorStop(1,'#102f42');ctx.fillStyle=surface;ctx.fillRect(0,sea,w,h-sea);
       line(ctx,0,sea+2,w,sea+2,'rgba(230,222,188,.42)',2);
     }
-    if(t>=6.8&&t<10.4)introFish(ctx,boatX+150*unit,sea+h*.065+Math.sin(t*4)*4,unit*.7);
-    const dogStart=boatY-42*unit,dogWater=sea+h*.02,dy=dogStart+(dogWater-dogStart)*jump-Math.sin(Math.PI*jump)*h*.055+(t>=10?Math.sin(t*7)*2:0);
-    const swim=clamp01((t-10)/.8),dx=boatX+unit*(92+250*jump+24*swim+Math.sin(t*3)*7*swim);
-    if(t<8.7)introDog(ctx,boatX+92*unit,boatY-42*unit,unit*.82,Math.sin(t*4)*.04,{fade:1});
-    else if(t<19.4){introDog(ctx,dx,dy,unit*.82,jump<1?-.2*jump:.02*Math.sin(t*4),{wet:t>=10,fade:dogFade,paddling:t});
+    if(t>=6.8&&t<10.4)introFish(ctx,boatX+210*unit,sea+h*.025+Math.sin(t*4)*3,unit*.65);
+    const dogStart=boatY-36*unit,dogWater=sea+h*.02,dy=dogStart+(dogWater-dogStart)*jump-Math.sin(Math.PI*jump)*h*.16+(t>=10?Math.sin(t*7)*2:0);
+    const swim=clamp01((t-10)/.8),dx=boatX+unit*(48+310*jump+24*swim+Math.sin(t*3)*7*swim);
+    if(t<8.7)introDog(ctx,boatX+48*unit,boatY-36*unit,unit*.82,0,{fade:1});
+    else if(t<19.4){const dogScale=jump<1?.82:.60;introDog(ctx,dx,dy,unit*dogScale,jump<1?-.35*jump:.02*Math.sin(t*4),{wet:t>=10,fade:dogFade,paddling:t});
       if(t>=9.9&&t<12.5){ctx.save();ctx.strokeStyle='rgba(230,245,237,.9)';ctx.lineWidth=3;for(let i=0;i<7;i++){ctx.beginPath();ctx.arc(dx+(i-3)*12,dy-8,6+i%2*5,Math.PI*1.1,Math.PI*1.9);ctx.stroke();}ctx.restore();}}
-    if(t>=11&&t<19.4){
-      const hx=boatX+unit*(390+Math.sin(t*2)*8),hy=sea+h*.02+Math.sin(t*5)*3;
-      ctx.save();ctx.translate(hx,hy);ctx.rotate(Math.PI/2);introPerson(ctx,0,0,unit,{reach:1,color:'#2d6b73'});ctx.restore();
-      ctx.save();ctx.strokeStyle='rgba(230,245,237,.85)';ctx.lineWidth=3;for(let i=0;i<8;i++){ctx.beginPath();ctx.arc(hx+(i-4)*15,hy+Math.sin(t*3+i)*5,5+i%2*5,Math.PI*1.1,Math.PI*1.9);ctx.stroke();}ctx.restore();
+    if(t>=12&&t<19.4){
+      const dive=clamp01((t-12)/1.35),diveEase=dive*dive*(3-2*dive),startX=boatX-46*unit;
+      const hx=startX+(boatX+unit*390-startX)*diveEase+Math.sin(t*2)*4*dive,hy=boatY-26*unit+(sea+h*.02-(boatY-26*unit))*diveEase-Math.sin(Math.PI*dive)*h*.16+(t>=11.55?Math.sin(t*5)*3:0);
+      ctx.save();ctx.translate(hx,hy);ctx.rotate(Math.PI/2*diveEase);introPerson(ctx,0,0,unit,{reach:1,checked:true,color:'#2d6b73'});ctx.restore();
+      // Keep wake rings in the sea, only after the dive reaches the water.
+      if(dive>=1){const waveY=sea+7;ctx.save();ctx.strokeStyle='rgba(230,245,237,.82)';ctx.lineWidth=3;for(let i=0;i<8;i++){ctx.beginPath();ctx.arc(hx+(i-4)*15,waveY+Math.sin(t*3+i)*2,5+i%2*5,Math.PI*1.1,Math.PI*1.9);ctx.stroke();}ctx.restore();}
     }
   }
   ctx.restore();
@@ -1638,22 +1817,23 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
     action("shoot");
   }
   function onKeyDown(event) {
-    if (event.metaKey || event.ctrlKey || event.altKey || editingTarget(event.target)) return;
+    // Window listeners see the shadow host as target, not the focused input.
+    const target=event.composedPath?.()[0] || event.target;
+    if (event.metaKey || event.ctrlKey || event.altKey || editingTarget(target)) return;
     const k = event.key.toLowerCase();
     if (!controlKey(k)) return;
-    if (k.startsWith("arrow") || k === " ") event.preventDefault();
+    if (!client.data.reading && (k.startsWith("arrow") || k === " ")) event.preventDefault();
     if(introProgress(client)!==null){if(k==='escape')skipIntro();return;}
     if(client.restartPrompt){if((k==='f'||k==='escape')&&!event.repeat)closeDocument();event.preventDefault();return;}
     if(client.data.ending) { if(controlKey(k)) event.preventDefault();finaleKey(client,k,event.repeat);return; }
     if(client.data.reading) {
-      if(controlKey(k)) event.preventDefault();
-      if((k==="f"||k==="escape") && !event.repeat) action("close_reading");
+      if((k==="f"||k==="escape") && !event.repeat) {event.preventDefault();action("close_reading");}
       return;
     }
     if(client.readingPending) { if(controlKey(k)) event.preventDefault();return; }
 
     if(k === "escape"){client.inventoryOpen=false;client.scope=null;return;}
-    if(k === "j" && !event.repeat) {event.preventDefault();action("journal");return;}
+    if(k === "j" && !event.repeat) {event.preventDefault();client.documentOrigin="stage";action("journal");return;}
     if(client.data.capture_phase === "active" || client.capturePending) return;
     if(client.ambushAnim && (k==='e'||k==='f')) {event.preventDefault();return;}
     if(client.data.hidden_barrel && k==='e') {
@@ -1719,12 +1899,16 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
   function onKeyUp(event) {
     const k = event.key.toLowerCase();
     if (!controlKey(k)) return;
-    if ((k.startsWith("arrow") || k === " ") && !editingTarget(event.target)) event.preventDefault();
     client.keys.delete(k);
+    if(editingTarget(event.composedPath?.()[0] || event.target)) return;
+    if (!client.data.reading && (k.startsWith("arrow") || k === " ")) event.preventDefault();
     reportPosition(true);
   }
   function onBlur() { client.keys.clear(); reportPosition(true); }
-  function onPointerDown() { stage.focus({ preventScroll: true }); }
+  function onPointerDown(event) {
+    if(event.target.closest?.('.pt-document-panel')) return;
+    stage.focus({ preventScroll: true });
+  }
   function onItemClick(event){
     const item=event.currentTarget.dataset.item;
     if(client.data.ending || client.data.reading || client.data.capture_phase==="active" || client.data.hidden_barrel) return;
@@ -1732,11 +1916,11 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
   }
   function closeDocument(){if(client.restartPrompt){client.restartPrompt=false;renderStoryPanels(parentElement,client);}else if(!client.actionInFlight) action('close_reading');}
   function confirmEnding(){if(client.data.reading==='restart_confirm'||client.restartPrompt){action('restart_game','confirmed');return;} if(!client.actionInFlight) action("story_finish",client.data.reading==="confirm_castaway"?"cell_floor":client.data.reading==="confirm_dinghy"?"lifeboat":client.data.reading==="confirm_takeover"?"helm":"return_crate"); }
-  function openJournal(){ if(!client.data.reading) action("journal"); }
+  function openJournal(){ if(!client.data.reading) {client.documentOrigin='journal';action("journal");} }
   function replay(){ if(client.data.finale?.status==='won')client.finaleWonAt=performance.now();else client.endingStartedAt=performance.now(); }
   function trapDocumentFocus(event){
     if(event.key!=="Tab") return;
-    const stops=[...documentPanel.querySelectorAll('button:not([hidden]),summary')].filter(el=>!el.disabled);
+    const stops=[...documentPanel.querySelectorAll('button,summary')].filter(el=>!el.disabled && !el.closest('[hidden]'));
     const current=event.composedPath()[0],i=stops.indexOf(current);
     if(!stops.length) return;
     if(event.shiftKey && i<=0){event.preventDefault();stops.at(-1).focus();}
@@ -1858,7 +2042,7 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
     documentClose.disabled=client.actionInFlight;endingConfirm.disabled=client.actionInFlight;
     const itemNames={none:"Empty",cell_key:"🗝️ Cell key",blue_key:"🔵 Blue key",pistol:"🔫 Pistol",lamp:"🏮 Lamp"};
     inventoryPanel.querySelector(".pt-hand-slot strong").textContent=itemNames[client.data.held_item] || "Empty";
-    inventoryPanel.querySelector(".pt-outfit-status").textContent="Outfit: "+(client.data.story?.voyage?.captain_worn?"Captain uniform":client.data.disguised?"Guard uniform":"Sailor");
+    inventoryPanel.querySelector(".pt-outfit-status").textContent="Outfit: "+(client.data.story?.voyage?.captain_worn?"Captain uniform":client.data.disguised?"Guard uniform":"Prisoner stripes");
     for(const button of itemButtons){
       const item=button.dataset.item;
       button.disabled=!(item==="cell_key"?client.data.has_key:item==="blue_key"?client.data.has_blue_key:item==="lamp"?client.data.has_lamp:client.data.has_pistol);
@@ -1904,7 +2088,7 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
     }
     feedback.hidden = Boolean(client.data.ending || client.data.reading) || !client.flashText || now >= client.flashUntil;
     if (!feedback.hidden) feedback.textContent = client.flashText;
-    documentPanel.querySelector(".pt-document-feedback").textContent=client.data.reading?client.flashText:"";
+    documentPanel.querySelector(".pt-document-feedback").textContent=client.data.reading && client.data.reading!=='journal'?client.flashText:"";
     raf = requestAnimationFrame(frame);
   }
 
@@ -1935,6 +2119,26 @@ export default function ({ data, parentElement, key, setTriggerValue, setStateVa
   return cleanup;
 }
 
+function syncJournalList(container,items,keyOf,update,title='') {
+  const signature=JSON.stringify(items);
+  if(container.dataset.signature===signature) return;
+  const old=new Map([...container.children].filter(n=>n.dataset.entry).map(n=>[n.dataset.entry,n]));
+  // Remove only obsolete entries; leave focused, expanded controls in place.
+  const keys=new Set(items.map(keyOf));
+  for(const node of [...container.children]) {
+    if(!node.dataset.entry || !keys.has(node.dataset.entry)) node.remove();
+  }
+  if(title){const heading=document.createElement('h3');heading.textContent=title;container.prepend(heading);}
+  let previous=title?container.firstChild:null;
+  for(const item of items){
+    const key=keyOf(item),node=old.get(key)||document.createElement('article');
+    node.dataset.entry=key;update(node,item);
+    if(node.previousSibling!==previous || node.parentNode!==container) container.insertBefore(node,previous?previous.nextSibling:container.firstChild);
+    previous=node;
+  }
+  container.dataset.signature=signature;
+}
+
 function renderStoryPanels(parent,client) {
   const d=client.data,s=d.story;
   if(!s) return; // Old component protocol is still supported by regression tests.
@@ -1943,33 +2147,72 @@ function renderStoryPanels(parent,client) {
   panel.hidden=!reading;
   const confirm=['restart_confirm','confirm_crate','confirm_takeover','confirm_dinghy','confirm_castaway'].includes(reading);
   const doc=d.documents[reading];
+  panel.setAttribute('aria-label',doc?.title || 'Journal');
   panel.querySelector('.pt-document-kicker').textContent=doc?.kicker || 'YOUR DISCOVERIES';
   panel.querySelector('.pt-document-title').textContent=doc?.title || 'Journal';
   panel.querySelector('.pt-document-body').textContent=doc?.body || 'Notes from your journey. Only discoveries you have made appear here.';
   let hint=doc?.hint || '';
-  if(d.reading==='return_crate' || d.reading==='journal' && (s.inspected.includes('return_crate')||s.inspected.includes('manifest_desk'))) {
+  if(d.reading==='return_crate') {
     const check=(yes,text)=>(yes?'✓ ':'○ ')+text;
     hint=[check(s.crate_open,'Open crate 07 with the crowbar or pay the cook two coins'),d.dining_alive?'✓ The cook is alive':'× The cook is dead'].join('\n');
   }
-  panel.querySelector('.pt-document-hint').textContent=hint;
+  const hintNode=panel.querySelector('.pt-document-hint');
+  hintNode.textContent=hint;hintNode.hidden=!hint;
+  const isJournal=reading==='journal';
+  const guidance=panel.querySelector('.pt-journal-guidance');
+  guidance.hidden=!isJournal;
+  panel.querySelector('.pt-discoveries-heading').hidden=!isJournal;
   const entries=panel.querySelector('.pt-journal-entries');
-  entries.replaceChildren();
-  if(d.reading==='journal') {
-    for(const id of s.inspected) {
-      const known=d.documents[id];if(!known || d.rules.story_points[id]?.kind==='chest') continue;
-      const detail=document.createElement('details'), summary=document.createElement('summary'),p=document.createElement('p');
-      summary.textContent=known.title;p.textContent=known.body;
-      detail.append(summary,p);entries.append(detail);
+  entries.hidden=!isJournal;
+  // Keyed entries keep native details, keyboard focus and scroll position on
+  // routine server updates. Clearer hints never send a gameplay action.
+  if(isJournal) {
+    const hints=d.journal_hints||[];
+    syncJournalList(guidance,hints,h=>h.id,(node,h)=>{
+      if(!node.firstChild) {
+        node.className='pt-journal-card';
+        const heading=document.createElement('h4'),status=document.createElement('span'),
+          text=document.createElement('p'),detail=document.createElement('details'),
+          summary=document.createElement('summary'),clearer=document.createElement('p');
+        heading.className='pt-hint-title';status.className='pt-hint-status';
+        text.className='pt-hint-text';clearer.className='pt-hint-clearer';
+        summary.textContent='Show a clearer hint';
+        detail.append(summary,clearer);node.append(status,heading,text,detail);
+      }
+      node.querySelector('.pt-hint-title').textContent=h.title;
+      node.dataset.status=h.status;
+      node.querySelector('.pt-hint-status').textContent=h.status;
+      node.querySelector('.pt-hint-text').textContent=h.text;
+      node.querySelector('.pt-hint-clearer').textContent=h.clearer;
+    },'Possible next steps');
+    const discoveries=s.inspected.filter(id=>d.documents[id] && d.rules.story_points[id]?.kind!=='chest');
+    syncJournalList(entries,discoveries,id=>id,(node,id)=>{
+      if(!node.firstChild){const detail=document.createElement('details');detail.append(document.createElement('summary'),document.createElement('p'));node.append(detail);}
+      node.querySelector('summary').textContent=d.documents[id].title;
+      node.querySelector('p').textContent=d.documents[id].body;
+    });
+    if(!discoveries.length && !entries.firstChild){
+      const empty=document.createElement('p');empty.className='pt-journal-empty';
+      empty.textContent='No documents recorded yet. Inspect letters and logs with F; their words will stay here.';
+      entries.append(empty);
     }
-    if(!s.inspected.length) {
-      const p=document.createElement('p');p.textContent='No clues yet. Look for the letter by the bed in the cell.';entries.append(p);
-    }
+    panel.querySelector('.pt-document-body').textContent=d.multiplayer
+      ? 'Discoveries and equipment are shared with your crewmate. These suggestions also reflect your own disguise. The ship stays live while you read; check the situation before acting.'
+      : 'Follow a lead, or keep exploring. Clearer hints are yours to reveal.';
   }
+  panel.querySelector('.pt-document-actions span').textContent=d.multiplayer?'Ship is live · stay alert':'Game paused';
   const close=panel.querySelector('.pt-document-close');
+  close.disabled=Boolean(client.actionInFlight);
   close.textContent=reading==='restart_confirm'?'Keep playing · F':confirm?'Keep exploring · F':'Back to the ship · F';
   const yes=panel.querySelector('.pt-ending-confirm');
   yes.hidden=!confirm;yes.textContent=reading==='restart_confirm'?'Restart game':d.reading==='confirm_castaway'?'Swallow the pills':d.reading==='confirm_dinghy'?'Lower the dinghy':d.reading==='confirm_takeover'?'Take over the ship':'Climb in and escape';
-  if(reading) close.focus({preventScroll:true});
+  if(reading && reading!==client.previousDocument) close.focus({preventScroll:true});
+  if(!reading && client.previousDocument) {
+    const destination=parent.querySelector(client.documentOrigin==='journal'?'.pt-journal-button':'.pt-stage');
+    if(destination){destination.disabled=false;destination.focus({preventScroll:true});}
+    client.documentOrigin='stage';
+  }
+  client.previousDocument=reading;
   const storyInventory=parent.querySelector('.pt-story-inventory');
   storyInventory.replaceChildren();
   for(const id of s.items) {
@@ -2109,24 +2352,49 @@ function drawCannon(ctx,x,y,firedAt,now) {
   if(m.boom){ctx.save();ctx.globalAlpha=Math.max(0,1-age/1100);label(ctx,'BOOM!',x-70,y-70-age/40,30);ctx.restore();}
   label(ctx,age===null||age<0?'CANNON':'EMPTY CANNON',x-28,y-60,9);
 }
-function storyDecor(ctx,d) {
+function storyDecor(ctx,d,position=d.position) {
   const s=d.story || {items:[],inspected:[]};
+  const nearby=!d.reading && !d.ending && d.capture_phase==='none' && !d.hidden_barrel
+    && position ? storyPoint(position,d.rules,d)?.[0] : null;
   for(const [id,p] of Object.entries(d.rules.story_points || {})) {
     const y=p.zone==='mast_top'?d.rules.mast_top_y:d.rules.floors[p.zone][2],x=p.x;
+    // Draw a quiet marker behind a nearby visible prop, never through the
+    // foreground bars or on hidden destinations such as the cell floor.
+    if(id===nearby && ['document','chest','return_crate','winch','helm','window'].includes(p.kind)) {
+      ctx.save();ctx.strokeStyle='rgba(249,220,148,.75)';ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.ellipse(x,y-1,p.kind==='document'?23:31,4,0,0,Math.PI*2);ctx.stroke();ctx.restore();
+    }
     if(p.kind==='telescope'){drawTelescope(ctx,x,y);continue;}
     if(p.kind==='cannon'){drawCannon(ctx,x,y,s.voyage?.cannon_fired,gameNow(d));continue;}
     if(p.kind==='coins'){crate(ctx,x-20,y,40,27);if(!(s.voyage?.claimed||[]).includes(id)){ctx.fillStyle='#efc24c';ctx.beginPath();ctx.arc(x,y-35,7,0,Math.PI*2);ctx.fill();}label(ctx,'COINS',x-21,y-49,9);}
     else if(p.kind==='chest') {
+      ctx.fillStyle='rgba(10,24,26,.2)';ctx.beginPath();ctx.ellipse(x+2,y,30,4,0,0,Math.PI*2);ctx.fill();
       roundBox(ctx,x-25,y-32,50,30,4,'#536e68','#1f3835');
+      line(ctx,x-23,y-29,x+22,y-29,'#8da28b',1);line(ctx,x-23,y-9,x+22,y-9,'#3e5853',1);
       const opened=s.inspected.includes(id);
       roundBox(ctx,x-27,y-(opened?49:40),54,10,3,'#9ea581','#3d5145');
       line(ctx,x-14,y-31,x-14,y-3,'#d8b271',3);line(ctx,x+14,y-31,x+14,y-3,'#d8b271',3);
       if(opened && !s.items.includes(p.item)) drawChestItem(ctx,p.item,x,y-18);
       label(ctx,opened&&s.items.includes(p.item)?'TAKEN':p.name.toUpperCase(),x-39,y-60,9);
     } else if(p.kind==='document') {
-      roundBox(ctx,x-17,y-26,34,23,2,'#ebd7a6','#705937');
-      for(let i=0;i<3;i++) line(ctx,x-10,y-20+i*5,x+10,y-20+i*5,'#8b7a55',1);
+      roundBox(ctx,x-16,y-24,34,23,2,'rgba(15,25,25,.35)');
+      roundBox(ctx,x-17,y-26,34,23,2,'#f5e5b8','#705937');
+      ctx.fillStyle='#ceb985';ctx.beginPath();ctx.moveTo(x+9,y-26);ctx.lineTo(x+17,y-18);ctx.lineTo(x+9,y-18);ctx.closePath();ctx.fill();
+      line(ctx,x-15,y-24,x+7,y-24,'#fff5d8',1);
+      for(let i=0;i<3;i++) line(ctx,x-10,y-20+i*5,x+(i===2?3:7),y-20+i*5,'#756645',1);
+      ctx.fillStyle='#a1513d';ctx.beginPath();ctx.arc(x+10,y-9,2.5,0,Math.PI*2);ctx.fill();
       label(ctx,id==='opening_letter'?'LETTER':id==='manifest_desk'?'MANIFEST':'JOURNAL',x-29,y-35,9);
+    } else if(p.kind==='painting') {
+      // Hang the seascape just left of the provisions doorway.
+      ctx.save();ctx.translate(7,0);
+      roundBox(ctx,x-23,y-91,46,32,2,'#b88a50','#493324');
+      ctx.fillStyle='#e4bc78';ctx.fillRect(x-19,y-87,38,24);
+      ctx.fillStyle='#618b91';ctx.fillRect(x-19,y-75,38,12);
+      ctx.fillStyle='#f5d79a';ctx.beginPath();ctx.arc(x+9,y-81,4,0,Math.PI*2);ctx.fill();
+      line(ctx,x-6,y-78,x-6,y-68,'#493a2c',1.5);
+      ctx.fillStyle='#f3e6c6';ctx.beginPath();ctx.moveTo(x-5,y-77);ctx.lineTo(x+1,y-70);ctx.lineTo(x-5,y-70);ctx.fill();
+      line(ctx,x-11,y-68,x+2,y-68,'#493a2c',2);
+      ctx.restore();
     } else if(p.kind==='window') {
       roundBox(ctx,x-26,y-81,52,38,13,'#5995a2','#dbbb7c');
       line(ctx,x-22,y-62,x+22,y-62,'#d7bb83',3);line(ctx,x,y-78,x,y-46,'#d7bb83',3);
@@ -2423,8 +2691,10 @@ function drawCastawayCrawl(ctx, mouth, scale, progress, t, coat, disguised) {
   ctx.save();
   ctx.rotate(-.16);
   roundBox(ctx, -14, -24, 30, 17, 5, coat, '#2c2927');
+  if(coat===PRISONER_CLOTH)prisonerShirt(ctx,-14,-24,30,17);
   ctx.restore();
   line(ctx, 10, -18, 17, -8, coat, 6);
+  if(coat===PRISONER_CLOTH)prisonerLimb(ctx,10,-18,17,-8);
   line(ctx, 17, -8, 27 + stride, -3, '#d0a173', 5);
   ctx.fillStyle = '#d0a173';
   ctx.beginPath();
@@ -2434,6 +2704,7 @@ function drawCastawayCrawl(ctx, mouth, scale, progress, t, coat, disguised) {
   ctx.beginPath();
   ctx.arc(24, -24, 1.3, 0, Math.PI * 2);
   ctx.fill();
+  if(coat!==PRISONER_CLOTH){
   ctx.fillStyle = disguised ? '#332c29' : '#263940';
   ctx.beginPath();
   ctx.moveTo(7, -29);
@@ -2443,6 +2714,8 @@ function drawCastawayCrawl(ctx, mouth, scale, progress, t, coat, disguised) {
   ctx.lineTo(33, -29);
   ctx.fill();
   line(ctx, 7, -29, 33, -29, disguised ? '#dbb36e' : '#b5c9be', 2);
+  }
+  if(coat===PRISONER_CLOTH)prisonerHair(ctx,20,-30);
   ctx.restore();
 }
 
@@ -2538,7 +2811,7 @@ function drawCastawayWaterBarrel(ctx, w, h, t, motion, coat, disguised) {
 function drawCastaway(ctx, w, h, t, client) {
   const motion = castawayMotion(w, h, t);
   const {disguised} = client.data;
-  const coat = disguised ? '#9c3d33' : '#2d6b73';
+  const coat = disguised ? '#9c3d33' : PRISONER_CLOTH;
   const caption = text => {
     ctx.save();
     ctx.textAlign = 'center';

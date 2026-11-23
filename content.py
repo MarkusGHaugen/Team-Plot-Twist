@@ -44,6 +44,7 @@ STORY_POINTS = {'opening_letter': {'zone': 'cell', 'x': 205.0, 'reach': 48.0, 'n
                 'item': 'seal'},
  'captains_log': {'zone': 'captain', 'x': 2350.0, 'reach': 28.0, 'name': 'Captain log', 'kind': 'document'},
  'boat_window': {'zone': 'crew_room', 'x': 2140.0, 'reach': 27.0, 'name': 'Sea window', 'kind': 'window'},
+ 'crew_painting': {'zone': 'armory', 'x': 2152.0, 'reach': 9.0, 'name': 'Inspect painting', 'kind': 'painting'},
  'lifeboat': {'zone': 'aft_deck', 'x': 1660.0, 'reach': 27.0, 'name': 'Dinghy winch', 'kind': 'winch'},
  'return_crate': {'zone': 'mid',
                   'x': 735.0,
@@ -112,6 +113,9 @@ DOCUMENTS = {'opening_letter': {'title': 'You are not the only one who wants to 
                           'The helm on the aft deck steers the ship. Nobody outside my crew shall command it '
                           'while one of us still stands.',
                   'hint': 'Takeover: defeat all ten opponents and use the helm on the aft deck.'},
+ 'crew_painting': {'title': 'A quiet sea', 'kicker': 'ARMORY',
+                   'body': 'A tiny ship sails beneath a golden sunset. Someone has painted a homeward course.',
+                   'hint': 'F closes the painting.'},
  'boat_window': {'title': 'A boat beyond the window',
                  'kicker': 'VIEW FROM THE CREW QUARTERS',
                  'body': 'A dinghy hangs outside. Its winch is on the aft deck. A folded sail lies in the '

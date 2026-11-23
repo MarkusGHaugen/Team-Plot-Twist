@@ -1,6 +1,7 @@
 """Team branding, version and browser-save separation."""
 import json,subprocess,shutil,tomllib
 from pathlib import Path
+from test_canvas_rules import require_node
 
 def test_team_metadata_and_lock_agree():
  project=tomllib.loads(Path('pyproject.toml').read_text())['project']
@@ -22,7 +23,7 @@ def test_team_identity_does_not_read_or_overwrite_predecessor_save():
  vm.runInContext(input.backup.replace('const SAVE_KEY','const BACKUP_KEY').replaceAll('setItem(SAVE_KEY','setItem(BACKUP_KEY'),c);
  vm.runInContext('backup({data:{player_id:"b".repeat(32),state:{team:true}}})',c);
  console.log(JSON.stringify({result,solo:JSON.parse(values.get('plot-twist-browser-save-v1')),team:JSON.parse(values.get('team-plot-twist-browser-save-v1'))}));'''
- r=subprocess.run([shutil.which('node'),'-e',script],input=json.dumps({'identity':identity,'backup':backup}),capture_output=True,text=True,check=True)
+ r=subprocess.run([require_node(),'-e',script],input=json.dumps({'identity':identity,'backup':backup}),capture_output=True,text=True,check=True)
  v=json.loads(r.stdout)
  assert v['result']['id']=='b'*32 and v['result']['backup'] is None
  assert v['solo']=={'id':'a'*32,'backup':{'secret':'private-progress'}}
