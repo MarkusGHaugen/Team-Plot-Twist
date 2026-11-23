@@ -1613,7 +1613,7 @@ function drawIntroScene(ctx,w,h,t) {
       const surface=ctx.createLinearGradient(0,sea,0,h);surface.addColorStop(0,'#287185');surface.addColorStop(1,'#102f42');ctx.fillStyle=surface;ctx.fillRect(0,sea,w,h-sea);
       line(ctx,0,sea+2,w,sea+2,'rgba(230,222,188,.42)',2);
     }
-    if(t>=6.8&&t<10.4)introFish(ctx,boatX+210*unit,sea+h*.025+Math.sin(t*4)*3,unit*.65);
+    if(t>=6.8&&t<10.4)introFish(ctx,boatX+350*unit,sea+h*.025+Math.sin(t*4)*3,unit*.65);
     const dogStart=boatY-36*unit,dogWater=sea+h*.02,dy=dogStart+(dogWater-dogStart)*jump-Math.sin(Math.PI*jump)*h*.16+(t>=10?Math.sin(t*7)*2:0);
     const swim=clamp01((t-10)/.8),dx=boatX+unit*(48+310*jump+24*swim+Math.sin(t*3)*7*swim);
     if(t<8.7)introDog(ctx,boatX+48*unit,boatY-36*unit,unit*.82,0,{fade:1});
