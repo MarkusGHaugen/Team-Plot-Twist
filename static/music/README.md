@@ -6,3 +6,5 @@ Audio files were supplied by the project owner for use in this game. The origina
 - `alert-v1.ogg`: **Deadly Combat / The Unstoppable**, by **RPG Soundtracks**. Source reference: https://www.youtube.com/watch?v=m-1S1V1PZHA. Complete supplied recording, approximately 66 minutes 44 seconds. The uploaded file had an MP3 extension but contained WebM/Opus audio. Converted to stereo Opus at a target 32 kbit/s.
 
 The recordings remain the work of their respective creators. This repository does not grant a separate licence to reuse them outside this project. Music must be enabled through the game's Music button. Both recordings loop; exploration resets for each new run, and alert music resets when alert mode is entered. A same-run Streamlit rerender does not restart either recording.
+
+The final dog rescue uses a short, locally synthesized C-major victory fanfare generated with the browser's Web Audio API. It plays by itself and does not add or redistribute a third recording.

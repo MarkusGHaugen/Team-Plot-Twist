@@ -43,7 +43,7 @@ def test_canvas_retries_lost_request_and_requires_matching_ack():
   globalThis.requestAnimationFrame=f=>{frame=f;return 1};globalThis.cancelAnimationFrame=()=>{};
   draw=()=>{};guardPose=()=>({x:900,y:365,facing:1,name:'pause'});
   guardCanSee=guardNoticesDoor=investigating=wardrobeInSight=()=>false;
-  const el=()=>({addEventListener:()=>{},removeEventListener:()=>{},querySelector:()=>el(),classList:{toggle:()=>{}},lastElementChild:{},focus:()=>{},setAttribute:()=>{}});
+  const el=()=>({addEventListener:()=>{},removeEventListener:()=>{},setAttribute:()=>{},querySelector:()=>el(),classList:{toggle:()=>{}},lastElementChild:{},focus:()=>{}});
   const parent={querySelector:()=>el(),querySelectorAll:()=>[]};
   const args={data:input,parentElement:parent,key:'reliable',setTriggerValue:(k,v)=>triggers.push(v),setStateValue:()=>{}};
   const event=k=>({key:k,target:new Element(),repeat:false,preventDefault:()=>{}});

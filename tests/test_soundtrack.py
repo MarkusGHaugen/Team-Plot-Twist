@@ -2,7 +2,7 @@ import json,subprocess,shutil
 from pathlib import Path
 from dataclasses import asdict,replace
 from logic import initial_state,Position,MAP_CONFIG,toggle_hammock
-from test_canvas_rules import canvas
+from test_canvas_rules import canvas, require_node
 
 def test_hammock_action_and_prompt_stay_at_cabin():
  s=replace(initial_state(),has_key=True,door_open=True,position=Position('chest_room',1120))
@@ -20,12 +20,14 @@ def test_walking_blue_key_draws_even_with_pistol():
 def async_canvas(expression):
  source=Path('game_component/game.js').read_text().replace('export default function','function mount')
  runner="const vm=require('vm'),v=JSON.parse(require('fs').readFileSync(0,'utf8')),c={URL};vm.createContext(c);vm.runInContext(v.source,c);Promise.resolve(vm.runInContext(v.expression,c)).then(r=>console.log(JSON.stringify(r))).catch(e=>{console.error(e);process.exitCode=1});"
- result=subprocess.run([shutil.which('node'),'-e',runner],input=json.dumps({'source':source,'expression':expression}),capture_output=True,text=True,check=True)
+ result=subprocess.run([require_node(),'-e',runner],input=json.dumps({'source':source,'expression':expression}),capture_output=True,text=True,check=True)
  return json.loads(result.stdout)
 
 MOCK=r'''
 let count=0,interval,clock=1000;
 globalThis.document={hidden:false,baseURI:'https://example.com/~/+/'};
+globalThis.performance={now:()=>1000};
+globalThis.window={AudioContext:class {constructor(){this.currentTime=0;this.sampleRate=48000;this.destination={};this.state='running';}createOscillator(){return {type:'',frequency:{setValueAtTime(){}},connect(){},start(){},stop(){}};}createGain(){return {gain:{setValueAtTime(){},exponentialRampToValueAtTime(){}},connect(){}};}resume(){return Promise.resolve();}}};
 globalThis.Date={now:()=>clock};globalThis.setInterval=fn=>{interval=fn;return 1};globalThis.clearInterval=()=>{};
 globalThis.Audio=class {constructor(src){count++;this.src=src;this.currentTime=0;this.paused=true;this.error=null;}addEventListener(){}pause(){this.paused=true;}play(){this.paused=false;return Promise.resolve();}};
 const calm={run_id:'one',capture_phase:'none',alert_until_ms:0,guard_routes:{},story:{}};
@@ -47,6 +49,53 @@ def test_recordings_switch_reset_loop_and_survive_rerenders():
  return {count,resumed,alert,continuous,clipped,reset,newGame,hidden,visible,stopped,url:e.src};
  })()''')
  assert result==dict(count=2,resumed=True,alert=True,continuous=True,clipped=True,reset=True,newGame=True,hidden=True,visible=True,stopped=True,url='https://example.com/~/+/app/static/music/exploration-v1.ogg')
+
+def test_rescue_restarts_the_cheerful_track():
+ result=async_canvas('(async()=>{'+MOCK+r'''
+ const m=musicEngine();m.touch(calm);
+ m.touch({...calm,ending:'castaway',finale:{status:'won'}},false,0,false,false,true);
+ return {enabled:m.enabled,mode:m.mode,explorePaused:m.tracks.explore.paused,alertPaused:m.tracks.alert.paused,victoryTimer:Boolean(m.victoryTimer)};
+ })()''')
+ assert result==dict(enabled=True,mode='victory',explorePaused=True,alertPaused=True,victoryTimer=True)
+
+def test_all_six_escape_cinematics_play_happy_music():
+ result=async_canvas('(()=>{'+MOCK+r'''
+ const routes=['takeover','crate','dinghy','command','lullaby','castaway'];
+ return routes.map(ending=>escapeEndingMusicNow({ending,finale:null},{data:{ending,finale:null},endingStartedAt:0}));
+ })()''')
+ assert result==[True]*6
+
+def test_escape_scene_starts_happy_track_then_silences_after_scene():
+ result=async_canvas('(()=>{'+MOCK+r'''
+ const m=musicEngine(),data={...calm,ending:'dinghy',finale:null};
+ m.touch(data,false,0,false,false,false,true);
+ const scene={enabled:m.enabled,mode:m.mode,playing:!m.tracks.explore.paused};
+ m.touch({...data,finale:{status:'active'}},false,0,false,false,false,false);
+ return {scene,after:m.mode,paused:m.tracks.explore.paused};
+ })()''')
+ assert result==dict(scene=dict(enabled=True,mode='explore',playing=True),after='ending',paused=True)
+
+def test_beach_celebration_starts_cheerful_music_automatically_then_turns_dramatic():
+ result=async_canvas('(async()=>{'+MOCK+r'''
+ const m=musicEngine();
+ const cell={enabled:m.enabled,tracks:m.tracks};
+ m.touch({...calm,ending:'castaway',finale:{status:'active'}},false,0,false,true,false);
+ const beach={enabled:m.enabled,mode:m.mode,playing:!m.tracks.explore.paused};
+ m.touch({...calm,ending:'castaway',finale:{status:'active'}},false,0,true,false,false);
+ const twist={mode:m.mode,dramatic:!m.tracks.alert.paused,cheerfulPaused:m.tracks.explore.paused};
+ m.touch({...calm,ending:'castaway',finale:{status:'won'}},false,0,false,false,true);
+ return {cell,beach,twist,rescue:{mode:m.mode,cheerfulPaused:m.tracks.explore.paused,dramaticPaused:m.tracks.alert.paused,victoryTimer:Boolean(m.victoryTimer)}};
+ })()''')
+ assert result==dict(cell=dict(enabled=False,tracks=None),beach=dict(enabled=True,mode='explore',playing=True),twist=dict(mode='alert',dramatic=True,cheerfulPaused=True),rescue=dict(mode='victory',cheerfulPaused=True,dramaticPaused=True,victoryTimer=True))
+
+def test_replacing_music_engine_stops_the_previous_players():
+ result=async_canvas('( ()=>{'+MOCK+r'''
+ let stopped=0;
+ globalThis.__teamPlotTwistMusic={version:8,enabled:true,timer:null,stop(){stopped++;},ctx:null};
+ const current=musicEngine();
+ return {version:current.version,stopped,oldEnabled:globalThis.__teamPlotTwistMusic.enabled};
+ })()''')
+ assert result==dict(version=9,stopped=1,oldEnabled=False)
 
 def test_failed_playback_turns_off_and_reports_error():
  result=async_canvas('(async()=>{'+MOCK+r'''

@@ -13,7 +13,7 @@ uv sync --locked
 uv run streamlit run app.py --server.port 8535
 ```
 
-Open **http://localhost:8535**. To try the cannon finale straight away, start with `TEAM_PLOT_TWIST_DEV=1` (for example `TEAM_PLOT_TWIST_DEV=1 uv run streamlit run app.py --server.port 8535`); a **Dev: jump to the cannon finale** button then appears next to New Game. It never shows online. On a Mac you can also run `run-team.command`; on Windows run `run-team.bat` after installing uv.
+Open **http://localhost:8535**. On a Mac you can also run `run-team.command`; on Windows run `run-team.bat` after installing uv.
 
 ```bash
 uv run pytest -q
@@ -34,7 +34,7 @@ Choose **Single player** or **Multiplayer** above the game. In multiplayer one p
 
 ## The last escape
 
-Reaching an ending is not quite the end. The music turns dark and the guards come back with cannons. Dodge ten cannonballs: **W / ↑** jumps low shots and **Space / S / ↓** ducks high ones. You have three lives. Survive and the dog from the intro comes to the rescue in a small boat (the seventh ending, "Free at last"). If you are caught you can try again. Details are in [specs/cannon-finale.md](specs/cannon-finale.md).
+Each of the six escape routes has its own scene with cheerful music, followed automatically by the mandatory cannon finale. The brief beach celebration reads **Free at last!** for about 5.7 seconds before the 4.8-second plot twist: the music changes to the dramatic guard theme as the text reveals that the guards are back. Dodge ten cannonballs fired about once a second: **W / ↑** jumps low shots and **Space / S / ↓** ducks high ones. You have three lives. Win, and a bright, celebratory fanfare plays for the dog’s arrival in a small boat and the rescue epilogue, "Free at last"; your original ending remains recorded. If the guards catch you, choose **Try again** for a new volley. The game never resets automatically. **New Game** asks for confirmation before replacing your save. Details are in [specs/cannon-finale.md](specs/cannon-finale.md).
 
 ## Things to do aboard
 
