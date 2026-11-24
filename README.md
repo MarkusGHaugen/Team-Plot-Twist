@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | Markus Haugen | [@MarkusGHaugen](https://github.com/MarkusGHaugen) | 78777 |
 | Magnus Monstad | [@MagnusMonstad](https://github.com/MagnusMonstad) | 78628 |
-| Casper | [@Caspergm](https://github.com/Caspergm) | 70279 |
+| Casper Gibert Mikkelsen | [@Caspergm](https://github.com/Caspergm) | 70279 |
 | Wendela Sparrman | [@wendelasparrman-lgtm](https://github.com/wendelasparrman-lgtm) | 74867 |
 | Hannah Karlsson | [@hannahkarlsson2026](https://github.com/hannahkarlsson2026) | 83511 |
 
