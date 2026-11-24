@@ -6,6 +6,8 @@
 
 ## Team
 
+*Forgot to add in the student numbers, they are added after deadline.*
+
 | Name | GitHub | Student number |
 | --- | --- | --- |
 | Markus Haugen | [@MarkusGHaugen](https://github.com/MarkusGHaugen) | 78777 |
