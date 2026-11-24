@@ -4,7 +4,15 @@
 
 **Play online:** https://team-plot-twist.streamlit.app (the app sleeps when unused; click the wake-up button and wait about a minute).
 
-**Team:** Markus Haugen ([@MarkusGHaugen](https://github.com/MarkusGHaugen)), Magnus Monstad ([@MagnusMonstad](https://github.com/MagnusMonstad)), Casper ([@Caspergm](https://github.com/Caspergm)), Wendela Sparrman ([@wendelasparrman-lgtm](https://github.com/wendelasparrman-lgtm)) and Hannah Karlsson ([@hannahkarlsson2026](https://github.com/hannahkarlsson2026)).
+## Team
+
+| Name | GitHub | Student number |
+| --- | --- | --- |
+| Markus Haugen | [@MarkusGHaugen](https://github.com/MarkusGHaugen) | 78777 |
+| Magnus Monstad | [@MagnusMonstad](https://github.com/MagnusMonstad) | 78628 |
+| Casper | [@Caspergm](https://github.com/Caspergm) | 70279 |
+| Wendela Sparrman | [@wendelasparrman-lgtm](https://github.com/wendelasparrman-lgtm) | 74867 |
+| Hannah Karlsson | [@hannahkarlsson2026](https://github.com/hannahkarlsson2026) | 83511 |
 
 Start with [START_HERE.md](START_HERE.md). It explains how to download the code, run the game, and contribute with GitHub Desktop.
 
